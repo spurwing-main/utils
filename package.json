@@ -1,0 +1,25 @@
+{
+  "name": "@tim-spw/utils",
+  "version": "0.1.2",
+  "type": "module",
+  "files": [
+    "loader.js",
+    "features/"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "node --test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier . --check",
+    "format:write": "prettier . --write"
+  },
+  "devDependencies": {
+    "eslint": "^9.10.0",
+    "eslint-plugin-import": "^2.29.0",
+    "prettier": "^3.3.3",
+    "jsdom": "^24.0.0"
+  }
+}

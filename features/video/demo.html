@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Video Feature Demo</title>
+    <style>
+      :root { --bg:#0b0d10; --fg:#e8e8e8; --muted:#99a1ab; --ok:#18b57e; --warn:#f5a623; --err:#e84855; --badge:#1e2430; }
+      html,body{ margin:0; padding:0; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; }
+      a { color:#7fb3ff; text-decoration:none; }
+      a:hover{ text-decoration:underline; }
+      header { position:sticky; top:0; z-index:10; background:linear-gradient(180deg, rgba(11,13,16,0.95), rgba(11,13,16,0.85)); backdrop-filter:saturate(1.2) blur(6px); padding:12px 16px; border-bottom:1px solid #1c2230; }
+      header .row{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+      header .row > * { margin:2px 0; }
+      header .pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:#121826; border:1px solid #273247; }
+      header button, header select, header input[type="checkbox"]+label { cursor:pointer; }
+      header button { padding:6px 10px; border-radius:6px; border:1px solid #2a3347; background:#151c2a; color:var(--fg); }
+      header button:hover { background:#1a2232; }
+
+      main { padding:16px; }
+      .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap:16px; }
+      .spacer { height: 80vh; display:flex; align-items:center; justify-content:center; color:var(--muted); border:1px dashed #2a3347; border-radius:8px; margin-bottom:16px; }
+
+      .card { position:relative; border:1px solid #273247; border-radius:10px; overflow:hidden; background:#0f1420; }
+      .card header { position:static; background:none; border:none; padding:10px; }
+      .card h3 { margin:0 0 4px; font-size:14px; }
+      .card p { margin:0; color:var(--muted); font-size:12px; }
+      .card .media { position:relative; display:flex; flex-direction:column; gap:8px; }
+      .vwrap { position:relative; }
+      .card video { display:block; width:100%; height:auto; background:#0b0d10; aspect-ratio:16 / 9; }
+      .badge { position:absolute; top:8px; left:8px; z-index:2; padding:4px 8px; border-radius:999px; background:var(--badge); color:var(--muted); border:1px solid #2a3347; font-size:12px; user-select:none; pointer-events:none; }
+      .badge.state-idle { color:#9aa3ad; }
+      .badge.state-loading { color:#b8c0cc; }
+      .badge.state-loaded { color:#7bc4ff; }
+      .badge.state-playing { color:var(--ok); }
+      .badge.state-paused { color:#ffdd88; }
+      .badge.state-error { color:var(--err); }
+
+      .controls { display:flex; gap:8px; align-items:center; padding:10px; border-top:1px solid #1e2638; }
+      .controls button { padding:6px 10px; border-radius:6px; border:1px solid #2a3347; background:#151c2a; color:var(--fg); cursor:pointer; }
+      .controls button:hover { background:#1a2232; }
+
+      .note { color:var(--muted); font-size:12px; }
+    </style>
+
+    <script>
+      // Optional IO toggle via query: ?noio=1
+      (function(){
+        try {
+          const params = new URL(location.href).searchParams;
+          if (params.get('noio') === '1') {
+            window.IntersectionObserver = undefined;
+          }
+        } catch(e){}
+      })();
+    </script>
+
+    <!-- Enable namespaced debug logs from loader via attribute (or use ?utils-debug=video) -->
+    <script type="module" src="../../loader.js" data-features="video" data-debug="video"></script>
+
+    <script type="module">
+      // Badge wiring: update per-video status based on custom events.
+      function ensureBadgeForVideo(video){
+        const wrap = video.parentElement;
+        let b = wrap.querySelector(':scope > .badge');
+        if (!b){ b = document.createElement('div'); b.className = 'badge state-idle'; b.textContent = 'idle'; wrap.appendChild(b); }
+        return b;
+      }
+      function setBadge(b, state, label){
+        b.className = 'badge ' + state;
+        b.textContent = label;
+      }
+      function wire(video){
+        const badge = ensureBadgeForVideo(video);
+        // Initial state (if we missed managed)
+        if (video.currentSrc || video.src){ setBadge(badge, 'state-loaded', 'loaded'); }
+        else setBadge(badge, 'state-idle', 'idle');
+        if (video.error){ setBadge(badge, 'state-error', 'error'); }
+        else if (video.paused === false){ setBadge(badge, 'state-playing', 'playing'); }
+
+        video.addEventListener('video:loaded', (e) => {
+          setBadge(badge, 'state-loaded', 'loaded');
+        });
+        video.addEventListener('video:play-request', (e) => {
+          // transient hint, do not override stronger states for long
+          setBadge(badge, 'state-loading', 'play-req');
+        });
+        video.addEventListener('video:playing', (e) => {
+          setBadge(badge, 'state-playing', 'playing');
+        });
+        video.addEventListener('video:paused', (e) => {
+          setBadge(badge, 'state-paused', 'paused');
+        });
+        video.addEventListener('video:error', (e) => {
+          setBadge(badge, 'state-error', 'error');
+          console.warn('video:error', e.detail);
+        });
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('video[data-video-src]').forEach(wire);
+
+        // Global controls
+        const $ = (sel) => document.querySelector(sel);
+        $('#playAll')?.addEventListener('click', () => {
+          import('./index.js').then(mod => { const Video = (mod.Video || mod.default?.Video); document.querySelectorAll('video').forEach(v => Video?.play(v)); });
+        });
+        $('#pauseAll')?.addEventListener('click', () => {
+          import('./index.js').then(mod => { const Video = (mod.Video || mod.default?.Video); document.querySelectorAll('video').forEach(v => Video?.pause(v)); });
+        });
+        $('#ensureLoadedAll')?.addEventListener('click', () => {
+          import('./index.js').then(mod => { const Video = (mod.Video || mod.default?.Video); document.querySelectorAll('video').forEach(v => Video?.ensureLoaded(v)); });
+        });
+        $('#toggleIO')?.addEventListener('click', () => {
+          const url = new URL(location.href);
+          const cur = url.searchParams.get('noio') === '1';
+          url.searchParams.set('noio', cur ? '0' : '1');
+          location.href = url.toString();
+        });
+      });
+    </script>
+  </head>
+  <body>
+    <header>
+      <div class="row">
+        <strong>Video Feature Demo</strong>
+        <span class="pill"><input id="toggleIO" type="button" value="Toggle IO (rAF fallback)" /></span>
+        <span class="pill"><button id="ensureLoadedAll">Ensure Loaded (All)</button></span>
+        <span class="pill"><button id="playAll">Play All</button></span>
+        <span class="pill"><button id="pauseAll">Pause All</button></span>
+        <span class="pill note">Use ?utils-debug=video for logs</span>
+      </div>
+    </header>
+    <main>
+      <section style="margin-bottom:24px;">
+        <h2>Video Feature Demo</h2>
+        <p>
+          This page demonstrates all supported <code>data-video-*</code> attributes and usage patterns for the modular, attribute-driven video feature.<br>
+          <strong>How it works:</strong> Add <code>data-video-src</code> and optional attributes to your <code><video></code>.<br>
+          The loader auto-initializes the feature via <code>init()</code> (idempotent). Use delegated controls with <code>data-video-action</code>.<br>
+          See <a href="README.md" target="_blank">README</a> for full documentation.
+        </p>
+        <ul>
+          <li>All examples below are managed by <code>features/video/index.js</code> via <code>loader.js</code>.</li>
+          <li>Use <code>?utils-debug=video</code> in the URL for debug logs.</li>
+        </ul>
+      </section>
+      <div class="spacer">Scroll down to trigger load-on-scroll examples</div>
+
+      <section class="grid">
+        <!-- A1: Visible/Hidden, threshold any -->
+        <article class="card">
+          <header>
+            <h3>A1: visible/hidden (any)</h3>
+            <p>
+              <strong>Pattern:</strong> load on scroll, play when visible, pause when hidden, threshold=any<br>
+              <code>
+                data-video-src<br>
+                data-video-load-when="scroll"<br>
+                data-video-play-when="visible"<br>
+                data-video-pause-when="hidden"<br>
+                data-video-scroll-threshold="any"<br>
+                data-video-scroll-margin="300px 0px"<br>
+                muted
+              </code>
+            </p>
+          </header>
+          <div class="media">
+            <div class="vwrap">
+              <!-- Example with inline comments for clarity -->
+              <video
+                data-video-src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+                data-video-load-when="scroll"
+                data-video-play-when="visible"
+                data-video-pause-when="hidden"
+                data-video-scroll-threshold="any"
+                data-video-scroll-margin="300px 0px"
+                muted
+              ></video>
+            </div>
+          </div>
+          <div class="controls">
+            <button data-video-action="toggle">Toggle</button>
+          </div>
+        </article>
+
+        <!-- A2: Visible/Hidden, threshold half -->
+        <article class="card">
+          <header>
+            <h3>A2: visible/hidden (half)</h3>
+            <p>threshold=half, margin=300px 0</p>
+          </header>
+          <div class="media">
+            <div class="vwrap"><video
+              data-video-src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+              data-video-load-when="scroll"
+              data-video-play-when="visible"
+              data-video-pause-when="hidden"
+              data-video-scroll-threshold="half"
+              data-video-scroll-margin="300px 0px"
+              muted
+            ></video></div>
+          </div>
+          <div class="controls">
+            <button data-video-action="toggle">Toggle</button>
+          </div>
+        </article>
+
+        <!-- A3: Visible/Hidden, threshold full -->
+        <article class="card">
+          <header>
+            <h3>A3: visible/hidden (full)</h3>
+            <p>threshold=full</p>
+          </header>
+          <div class="media">
+            <div class="vwrap"><video
+              data-video-src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+              data-video-load-when="scroll"
+              data-video-play-when="visible"
+              data-video-pause-when="hidden"
+              data-video-scroll-threshold="full"
+              data-video-scroll-margin="300px 0px"
+              muted
+            ></video></div>
+          </div>
+          <div class="controls">
+            <button data-video-action="toggle">Toggle</button>
+          </div>
+        </article>
+
+        <!-- B1: Pointer-only with parent pointer -->
+        <article class="card">
+          <header>
+            <h3>B1: pointer-only (container)</h3>
+            <p>load=pointer-on, play=pointer-on, pause=pointer-off, parent-pointer=.card</p>
+          </header>
+          <div class="media">
+            <div class="vwrap"><video
+              data-video-src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+              data-video-load-when="pointer-on"
+              data-video-play-when="pointer-on"
+              data-video-pause-when="pointer-off"
+              data-video-parent-pointer=".card"
+            ></video></div>
+          </div>
+          <div class="controls">
+            <button data-video-action="toggle">Toggle</button>
+          </div>
+        </article>
+
+        <!-- B2: Pointer-only bound to video (no parent selector) -->
+        <article class="card">
+          <header>
+            <h3>B2: pointer-only (self)</h3>
+            <p>no parent-pointer; pointer triggers are bound to the video element itself</p>
+          </header>
+          <div class="media">
+            <div class="vwrap"><video
+              data-video-src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+              data-video-load-when="pointer-on"
+              data-video-play-when="pointer-on"
+              data-video-pause-when="pointer-off"
+            ></video></div>
+          </div>
+          <div class="controls">
+            <button data-video-action="toggle">Toggle</button>
+          </div>
+        </article>
+
+        <!-- C1: Mixed visible + pointer override -->
+        <article class="card">
+          <header>
+            <h3>C1: mixed (visible + pointer)</h3>
+            <p>load=scroll pointer-on, play=visible pointer-on, pause=hidden pointer-off</p>
+          </header>
+          <div class="media">
+            <div class="vwrap"><video
+              data-video-src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+              data-video-load-when="scroll pointer-on"
+              data-video-play-when="visible pointer-on"
+              data-video-pause-when="hidden pointer-off"
+              data-video-parent-pointer=".card"
+              data-video-scroll-margin="300px 0px"
+            ></video></div>
+          </div>
+          <div class="controls">
+            <button data-video-action="toggle">Toggle</button>
+          </div>
+        </article>
+
+        <!-- D1: Manual controls only -->
+        <article class="card">
+          <header>
+            <h3>D1: manual only</h3>
+            <p>
+              <strong>Pattern:</strong> No load/play/pause triggers; use delegated controls.<br>
+              <code>data-video-src</code> only. Controls below use <code>data-video-action</code> and <code>data-video-target</code>.
+            </p>
+          </header>
+          <div class="media">
+            <div class="vwrap">
+              <video class="manual-demo" data-video-src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"></video>
+            </div>
+          </div>
+          <div class="controls">
+            <button data-video-action="play" data-video-target=".manual-demo" role="button" tabindex="0"><span>Play</span></button>
+            <button data-video-action="pause" data-video-target=".manual-demo" role="button" tabindex="0">Pause</button>
+            <button data-video-action="toggle" data-video-target=".manual-demo" role="button" tabindex="0">Toggle</button>
+          </div>
+        </article>
+
+        <!-- E1: Retry path: primary invalid, mobile valid -->
+        <article class="card">
+          <header>
+            <h3>E1: retry fallback</h3>
+            <p>
+              <strong>Pattern:</strong> Primary <code>data-video-src</code> is invalid, <code>data-video-mob-src</code> is valid (mobile fallback).<br>
+              <code>
+                data-video-src="404"<br>
+                data-video-mob-src="valid"<br>
+                data-video-load-when="scroll"<br>
+                data-video-play-when="visible"<br>
+                data-video-pause-when="hidden"<br>
+                data-video-scroll-threshold="half"<br>
+                muted
+              </code>
+            </p>
+          </header>
+          <div class="media">
+            <div class="vwrap"><video
+              data-video-src="https://example.com/this-404s.mp4"
+              data-video-mob-src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+              data-video-load-when="scroll"
+              data-video-play-when="visible"
+              data-video-pause-when="hidden"
+              data-video-scroll-threshold="half"
+              muted
+            ></video></div>
+          </div>
+          <div class="controls">
+            <button data-video-action="toggle">Toggle</button>
+          </div>
+        </article>
+
+        <!-- F1: Preload auto gating -->
+        <article class="card">
+          <header>
+            <h3>F1: preload auto gating</h3>
+            <p>
+              <strong>Pattern:</strong> <code>data-video-preload="auto"</code> (acts as metadata until first play).<br>
+              <code>
+                data-video-preload="auto"<br>
+                data-video-load-when="scroll"<br>
+                data-video-play-when="visible"<br>
+                data-video-pause-when="hidden"<br>
+                muted
+              </code>
+            </p>
+          </header>
+          <div class="media">
+            <div class="vwrap"><video
+              data-video-src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+              data-video-preload="auto"
+              data-video-load-when="scroll"
+              data-video-play-when="visible"
+              data-video-pause-when="hidden"
+              muted
+            ></video></div>
+          </div>
+          <div class="controls">
+            <button data-video-action="toggle">Toggle</button>
+          </div>
+        </article>
+
+        <!-- G1: Ownership within container (first managed descendant only) -->
+        <article class="card multi">
+          <header>
+            <h3>G1: container ownership</h3>
+            <p>two managed videos, parent-pointer=.multi → only first gets pointer</p>
+          </header>
+          <div class="media">
+            <div class="vwrap"><video
+              data-video-src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+              data-video-load-when="pointer-on"
+              data-video-play-when="pointer-on"
+              data-video-pause-when="pointer-off"
+              data-video-parent-pointer=".multi"
+            ></video></div>
+            <div class="vwrap"><video
+              data-video-src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+              data-video-load-when="pointer-on"
+              data-video-play-when="pointer-on"
+              data-video-pause-when="pointer-off"
+              data-video-parent-pointer=".multi"
+            ></video></div>
+          </div>
+          <div class="controls">
+            <button data-video-action="toggle">Toggle First Managed</button>
+          </div>
+        </article>
+
+        <!-- H1: Controls targeting via selector -->
+        <article class="card">
+          <header>
+            <h3>H1: controls targeting</h3>
+            <p>buttons use data-video-target to control the video</p>
+          </header>
+          <div class="media">
+            <div class="vwrap"><video class="select-me"
+              data-video-src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+              data-video-load-when="scroll"
+              data-video-play-when="visible"
+              data-video-pause-when="hidden"
+              muted
+            ></video></div>
+          </div>
+          <div class="controls">
+            <button data-video-action="play" data-video-target=".select-me"><span>Play via target</span></button>
+            <button data-video-action="pause" data-video-target=".select-me">Pause via target</button>
+          </div>
+        </article>
+
+      </section>
+    </main>
+  </body>
+</html>
