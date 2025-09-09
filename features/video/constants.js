@@ -4,12 +4,14 @@ export const A = Object.freeze({
   SRC: 'data-video-src',
   SRC_MOB: 'data-video-mob-src',
   PRELOAD: 'data-video-preload',
+  RESTART: 'data-video-play-restart',
   LOAD_WHEN: 'data-video-load-when',
   PLAY_WHEN: 'data-video-play-when',
   PAUSE_WHEN: 'data-video-pause-when',
   PARENT_POINTER: 'data-video-parent-pointer',
   THRESHOLD: 'data-video-scroll-threshold',
   MARGIN: 'data-video-scroll-margin',
+  MUTED: 'data-video-muted',
   ACTION: 'data-video-action',
   TARGET: 'data-video-target'
 });

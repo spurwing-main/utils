@@ -39,8 +39,8 @@ async function setupDom({ featuresAttr, query = '' , debugAttr, loaderSrc }){
   script.type = 'module';
   // Allow cache-busting query for isolated loader instance in tests
   script.src = loaderSrc || LOADER_URL; // must match import.meta.url for hostScript fallback
-  if (featuresAttr != null) script.setAttribute('data-features', featuresAttr);
-  if (debugAttr != null) script.setAttribute('data-debug', debugAttr);
+  if (featuresAttr !== null) script.setAttribute('data-features', featuresAttr);
+  if (debugAttr !== null) script.setAttribute('data-debug', debugAttr);
   window.document.head.appendChild(script);
   // Event capture
   const events = [];

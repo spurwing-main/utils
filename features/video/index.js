@@ -75,12 +75,10 @@ Fallback Behavior
 Acceptance Checklist (manual): see bottom of file for a quick list.
 */
 
-import { isVideo } from './internal-utils.js';
+import { isVideo, getDOC } from './internal-utils.js';
 import { Instance } from './instance.js';
 import { VIEW_FALLBACK, setupMutationObserver } from './observers.js';
 import { setupControlListeners } from './controls.js';
-
-const DOC = typeof document !== 'undefined' ? document : null;
 
 import { A } from './constants.js';
 
@@ -111,9 +109,21 @@ export const Video = {
     const inst = INSTANCES.get(el); 
     if (inst) inst.reloadSources(); 
   },
-  ensureLoaded(el){ 
-    const inst = INSTANCES.get(el); 
-    if (inst) inst._ensureLoaded('manual'); 
+  ensureLoaded(el){
+    if (!INSTANCES.has(el)) {
+      if (!el.hasAttribute(A.SRC)) {
+        // emit error for missing src
+        try {
+          el.dispatchEvent(new CustomEvent('video:error', { bubbles: false, cancelable: false, detail: { trigger: 'manual', reason: 'missing-src', url: null } }));
+        } catch(e){
+          console.error(e);
+        }
+        return;
+      }
+      Video.attach(el); // if has attribute
+    }
+    const inst = INSTANCES.get(el);
+    if (inst) inst._ensureLoaded('manual');
   },
   play(el){ 
     const inst = INSTANCES.get(el); 
@@ -129,25 +139,26 @@ export const Video = {
     if (inst.v.paused) inst._requestPlay('manual'); 
     else inst._requestPause('manual'); 
   },
-  attachAll(root){ 
-    root = root || DOC; 
-    if (!root) return []; 
-    const nodes = root.querySelectorAll?.('video['+A.SRC+']') || []; 
-    const out = []; 
-    for (let i=0;i<nodes.length;i++){ 
-      const v = nodes[i]; 
-      out.push(Video.attach(v)); 
-    } 
-    return out; 
+  attachAll(root){
+    root = root || getDOC();
+    if (!root) return [];
+    const nodes = root.querySelectorAll?.('video['+A.SRC+']') || [];
+    const out = [];
+    for (let i=0;i<nodes.length;i++){
+      const v = nodes[i];
+      out.push(Video.attach(v));
+    }
+    return out;
   }
 };
 
 // Mutation observation
 let _booted = false;
 function boot(){
-  if (!DOC || _booted) return;
+  const doc = getDOC();
+  if (!doc || _booted) return;
   _booted = true;
-  Video.attachAll(DOC);
+  Video.attachAll(doc);
 
   // Setup mutation observer
   setupMutationObserver(Video, INSTANCES);
@@ -157,9 +168,10 @@ function boot(){
 }
 
 export function init(){
-  if (!DOC) return;
-  if (DOC.readyState === 'complete' || DOC.readyState === 'interactive') boot();
-  else DOC.addEventListener('DOMContentLoaded', boot, { once: true });
+  const doc = getDOC();
+  if (!doc) return;
+  if (doc.readyState === 'complete' || doc.readyState === 'interactive') boot();
+  else doc.addEventListener('DOMContentLoaded', boot, { once: true });
 }
 
 export default { init, Video };

@@ -216,7 +216,7 @@ export function bootstrap(list){
 }
 
 // Package version (mirrors package.json). Update on release.
-export const VERSION = '0.1.0';
+export const VERSION = '0.1.3';
 
  // Import immediately; each feature's init() is DOM-safe (waits for DOM if needed).
 loadFeatures();

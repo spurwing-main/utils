@@ -399,6 +399,30 @@
           </div>
         </article>
 
+        <!-- I1: Restart on pointer-on after pointer-off -->
+        <article class="card">
+          <header>
+            <h3>I1: restart on pointer-on</h3>
+            <p>
+              <strong>Pattern:</strong> pointer-on loads/plays/restarts, pointer-off pauses<br>
+              <code>data-video-play-restart</code> enables restart instead of continuing from pause point<br>
+              Mouse over to play, out to pause, over again to restart from beginning.
+            </p>
+          </header>
+          <div class="media">
+            <div class="vwrap"><video
+              data-video-src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+              data-video-load-when="pointer-on"
+              data-video-play-when="pointer-on"
+              data-video-pause-when="pointer-off"
+              data-video-play-restart
+            ></video></div>
+          </div>
+          <div class="controls">
+            <button data-video-action="toggle">Toggle</button>
+          </div>
+        </article>
+
         <!-- H1: Controls targeting via selector -->
         <article class="card">
           <header>

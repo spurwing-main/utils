@@ -3,12 +3,7 @@ Observer and mutation logic for video feature
 Extracted from features/video/index.js for better modularity
 */
 
-import { isVideo } from './internal-utils.js';
-
-const DOC = typeof document !== 'undefined' ? document : null;
-const WIN = typeof window !== 'undefined' ? window : {};
-const RAF = (cb) => (WIN.requestAnimationFrame || WIN.setTimeout)(cb, 16);
-
+import { isVideo, getWIN, getDOC } from './internal-utils.js';
 import { A, logError } from './constants.js';
 
 // Simplified fallback visibility: immediate evaluation on scroll/resize/orientation
@@ -27,18 +22,20 @@ export const VIEW_FALLBACK = (() => {
     const first = list.size === 0;
     list.add(inst);
     if (first){
-      WIN.addEventListener('scroll', tick, { passive: true });
-      WIN.addEventListener('resize', tick);
-      WIN.addEventListener('orientationchange', tick);
+      const win = getWIN();
+      win.addEventListener('scroll', tick, { passive: true });
+      win.addEventListener('resize', tick);
+      win.addEventListener('orientationchange', tick);
     }
     tick();
   }
   function remove(inst){
     list.delete(inst);
     if (list.size === 0){
-      WIN.removeEventListener('scroll', tick);
-      WIN.removeEventListener('resize', tick);
-      WIN.removeEventListener('orientationchange', tick);
+      const win = getWIN();
+      win.removeEventListener('scroll', tick);
+      win.removeEventListener('resize', tick);
+      win.removeEventListener('orientationchange', tick);
     }
   }
   return { add, remove, schedule: tick };
@@ -46,12 +43,12 @@ export const VIEW_FALLBACK = (() => {
 
 // Mutation observation setup
 export function setupMutationObserver(Video, INSTANCES) {
-  if (!DOC) return null;
+  if (!getDOC()) return null;
 
   const ATTR_FILTER = [
-    A.SRC, A.SRC_MOB, A.PRELOAD,
+    A.SRC, A.SRC_MOB, A.PRELOAD, A.RESTART,
     A.LOAD_WHEN, A.PLAY_WHEN, A.PAUSE_WHEN,
-    A.PARENT_POINTER, A.THRESHOLD, A.MARGIN,
+    A.PARENT_POINTER, A.THRESHOLD, A.MARGIN, A.MUTED,
     A.ACTION, A.TARGET
   ];
 
@@ -116,6 +113,7 @@ export function setupMutationObserver(Video, INSTANCES) {
     }
   });
 
-  mo.observe(DOC.documentElement || DOC.body, { subtree: true, childList: true, attributes: true, attributeFilter: ATTR_FILTER });
+  const doc = getDOC();
+  mo.observe(doc.documentElement || doc.body, { subtree: true, childList: true, attributes: true, attributeFilter: ATTR_FILTER });
   return mo;
 }

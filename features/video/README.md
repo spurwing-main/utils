@@ -56,6 +56,7 @@ Demo: Open [`features/video/demo.html`](features/video/demo.html:1) to interacti
 | `data-video-src`                | URL (required)                       | Primary media URL.                                                                           |
 | `data-video-mob-src`            | URL (optional)                       | Alternate URL for mobile (`(max-width: 812px)`).                                             |
 | `data-video-preload`            | `none` \| `metadata` \| `auto`       | Preload mode. `auto` upgrades after first play. Default: `metadata`.                         |
+| `data-video-play-restart`       | Boolean (presence-based)             | Enables restart from 0 on pointer-on after pointer-off pause. Default: false (continue from paused position). |
 | `data-video-load-when`          | `scroll` \| `pointer-on`             | Triggers for loading video. Only `pointer-on` is valid for pointer state.                    |
 | `data-video-play-when`          | `visible` \| `pointer-on`            | Triggers for playing video. Only `pointer-on` is valid for pointer state.                    |
 | `data-video-pause-when`         | `hidden` \| `pointer-off`            | Triggers for pausing video. Only `pointer-off` is valid for pointer state.                   |
@@ -168,6 +169,12 @@ Add `role="button"` and `tabindex="0"` for keyboard accessibility.
 - `data-video-load-when="scroll pointer-on"`
 - `data-video-play-when="visible pointer-on"`
 - `data-video-pause-when="hidden pointer-off"`
+
+**8. Pointer-on to load/play, pointer-off to pause, restart on pointer-on**
+- `data-video-play-restart`
+- `data-video-load-when="pointer-on"`
+- `data-video-play-when="pointer-on"`
+- `data-video-pause-when="pointer-off"`
 
 ---
 

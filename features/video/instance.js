@@ -3,13 +3,12 @@ Instance class for video management
 Extracted from features/video/index.js for better modularity
 */
 
-import { isVideo, parseTokens, parseThresholdInput, parseRootMargin, closest, viewRatio } from './internal-utils.js';
+import { isVideo, parseTokens, parseThresholdInput, parseRootMargin, closest, viewRatio, getWIN, getDOC } from './internal-utils.js';
 import { A, logError } from './constants.js';
 
-const DOC = typeof document !== 'undefined' ? document : null;
-const WIN = typeof window !== 'undefined' ? window : {};
-const isIOSupported = () => typeof window !== 'undefined' && 'IntersectionObserver' in window && typeof window.IntersectionObserver === 'function';
-const RAF = (cb) => (WIN.requestAnimationFrame || WIN.setTimeout)(cb, 16);
+const getWin = getWIN;
+const getDoc = getDOC;
+const isIOSupported = () => { const w = getWin(); return !!w && 'IntersectionObserver' in w && typeof w.IntersectionObserver === 'function'; };
 const PRIORITY_PLAY_MS = 120; // pointer-on priority window to override hidden-pause
 
 function emit(el, name, detail){
@@ -19,11 +18,11 @@ function emit(el, name, detail){
     logError('emit', e);
   }
 }
-function log(...args){ try { (WIN.__UTILS_DEBUG__?.createLogger?.('video'))?.debug(...args); } catch { /* POLICY-EXCEPTION: debug logger unavailable */ } }
+function log(...args){ try { (getWin().__UTILS_DEBUG__?.createLogger?.('video'))?.debug(...args); } catch { /* POLICY-EXCEPTION: debug logger unavailable */ } }
 function warn(...args){ logError('instance', args); }
 
 function envHasHover(){
-  try { return WIN.matchMedia?.('(hover: hover) and (pointer: fine)')?.matches === true; } catch { return false; }
+  try { return getWin().matchMedia?.('(hover: hover) and (pointer: fine)')?.matches === true; } catch { return false; }
 }
 
 function hasNativeSrc(v){ return !!(v?.src || v?.currentSrc); }
@@ -110,6 +109,10 @@ Instance.prototype._readConfig = function(){
   // Preload request (default metadata)
   const preloadRaw = String(v.getAttribute(A.PRELOAD) || 'metadata').toLowerCase();
   const preload = (preloadRaw === 'auto' || preloadRaw === 'metadata' || preloadRaw === 'none') ? preloadRaw : 'metadata';
+  // Restart on pointer-on after pointer-off
+  const restart = v.hasAttribute(A.RESTART);
+  // Force muted when present
+  const muted = v.hasAttribute(A.MUTED);
 
   return {
     load: {
@@ -128,9 +131,13 @@ Instance.prototype._readConfig = function(){
     margin,
     parentPointer,
     preload,
+    // Whether to restart playback when pointer returns after pointer-off pause
+    restart,
     pointerEnabled: envHasHover(),
     srcPrimary,
-    srcMobile
+    srcMobile,
+    // Muted lock: when true, the instance enforces muted=true and will not attempt unmuted autoplay
+    muted
   };
 };
 
@@ -144,12 +151,16 @@ Instance.prototype._setup = function(){
     if (c.preload === 'auto') v.preload = 'metadata';
     else v.preload = c.preload;
   }
+  // Enforce forced muted when configured via attribute
+  if (c.muted) {
+    try { v.muted = true; } catch(e){ /* POLICY-EXCEPTION: cannot set muted flag (non-fatal) */ }
+  }
 
   // Visibility observation needed?
   const needsVis = c.load.onScroll || c.play.onVisible || c.pause.onHidden;
   if (needsVis){
     if (isIOSupported()){
-      this.io = new window.IntersectionObserver((entries) => { this._onIntersect(entries); }, {
+      const w = getWin(); this.io = new w.IntersectionObserver((entries) => { this._onIntersect(entries); }, {
         root: null, rootMargin: c.margin, threshold: c.threshold
       });
       this.io.observe(v);
@@ -238,7 +249,7 @@ Instance.prototype._bindPointer = function(target){
   target.addEventListener('pointerleave', onLeave, opts);
   target.addEventListener('pointercancel', onCancel, opts);
   // mouseenter/leave fallback if pointer events missing
-  if (!('onpointerenter' in WIN)){
+  if (!('onpointerenter' in getWin())){
     target.addEventListener('mouseenter', onEnter, opts);
     target.addEventListener('mouseleave', onLeave, opts);
   }
@@ -255,7 +266,7 @@ Instance.prototype._pickSrc = function(){
   const src = this.srcPrimary;
   const mob = this.srcMobile;
   if (!src && !mob) return null;
-  const isMob = (()=>{ try { return WIN.matchMedia?.('(max-width: 812px)')?.matches === true; } catch { return false; } })();
+  const isMob = (()=>{ try { return getWin().matchMedia?.('(max-width: 812px)')?.matches === true; } catch { return false; } })();
   const chosen = (isMob && mob) ? mob : (src || mob);
   return chosen || null;
 };
@@ -271,7 +282,7 @@ Instance.prototype._pickAlternate = function(){
 
 Instance.prototype._applySrc = function(url){
   const v = this.v;
-  try { new URL(url, DOC?.baseURI); } catch(e) { emit(v, 'video:error', { trigger: 'manual', reason: 'invalid-url', url: String(url) }); throw e; }
+  try { new URL(url, getDoc()?.baseURI); } catch(e) { emit(v, 'video:error', { trigger: 'manual', reason: 'invalid-url', url: String(url) }); throw e; }
   v.src = url;
   this.chosenSrc = url;
   // Remove data source attributes to lock selection (do not remove trigger config)
@@ -319,15 +330,26 @@ Instance.prototype._requestPlay = function(trigger, priority=false){
   emit(v, 'video:play-request', { trigger });
   log('[video] play-request', trigger);
 
+  // Restart if pointer-on after pointer-off pause and restart is enabled
+  if (trigger === 'pointer-on' && this.cfg.restart && this._pausedByPointerOff) {
+    try { this.v.currentTime = 0; } catch(e){ logError('set currentTime failed', e); }
+  }
+
   // Ensure loaded for play triggers that imply load
   if (!this.loaded) this._ensureLoaded(trigger);
 
   // Hint inline playback on all platforms
   if (!v.hasAttribute('playsinline')) v.setAttribute('playsinline','');
   if (!v.hasAttribute('webkit-playsinline')) v.setAttribute('webkit-playsinline','');
-  // Non-gesture play needs muted; for pointer-on, try unmuted first then fallback to muted on rejection
-  if (!isPointerOn){ v.muted = true; }
-
+  // Respect forced-muted config: if author requested data-video-muted, always keep muted true.
+  const enforceMuted = !!this.cfg.muted;
+  if (enforceMuted) {
+    try { v.muted = true; } catch(e){ /* POLICY-EXCEPTION: cannot set muted flag (non-fatal) */ }
+  } else {
+    // Non-gesture play needs muted; for pointer-on, try unmuted first then fallback to muted on rejection
+    if (!isPointerOn){ v.muted = true; }
+  }
+  
   try {
     const p = v.play();
     if (p && typeof p.then === 'function'){
@@ -335,8 +357,8 @@ Instance.prototype._requestPlay = function(trigger, priority=false){
         // Successful play → upgrade preload if originally requested auto
         if (this.requestedPreload === 'auto' && !this.upgradedAutoPreload){ v.preload = 'auto'; this.upgradedAutoPreload = true; }
       }).catch((err) => {
-        // Autoplay policy fallback for pointer-on: retry muted once
-        if (isPointerOn && !v.muted){
+        // Autoplay policy fallback for pointer-on: retry muted once (only when not enforced muted)
+        if (!enforceMuted && isPointerOn && !v.muted){
           try { v.muted = true; } catch { /* POLICY-EXCEPTION: mute flag application failed (non-fatal) */ }
           try {
             const p2 = v.play();
@@ -351,7 +373,7 @@ Instance.prototype._requestPlay = function(trigger, priority=false){
     }
   } catch { /* POLICY-EXCEPTION: initial play invocation threw (will rely on subsequent triggers) */ }
   this._lastPlayTrigger = trigger;
-  if (priority){ this._lastPriorityPlayAt = (WIN.performance?.now?.() ?? Date.now()); }
+  if (priority){ const w = getWin(); this._lastPriorityPlayAt = (w.performance?.now?.() ?? Date.now()); }
   if (isPointerOn || trigger === 'manual') this._pausedByPointerOff = false;
 };
 
@@ -386,7 +408,7 @@ Instance.prototype._onIntersect = function(entries){
   if (loadNow) this._ensureLoaded('visible');
   if (pauseNow){
     // Same-frame conflict: if a priority pointer-on just happened, let play win
-    const now = (WIN.performance?.now?.() ?? Date.now());
+    const w = getWin(); const now = (w.performance?.now?.() ?? Date.now());
     if (this._lastPriorityPlayAt && (now - this._lastPriorityPlayAt) < PRIORITY_PLAY_MS){
       // Skip this pause due to recent priority play
     } else {
@@ -404,14 +426,12 @@ Instance.prototype._onIntersect = function(entries){
 Instance.prototype._checkVisibilityFallback = function(){
   const v = this.v; const c = this.cfg;
   // Use zero-margin for fallback visibility detection to respect viewport edges
-  const ratio = viewRatio(v, { top: 0, right: 0, bottom: 0, left: 0 });
+  const ratio = viewRatio(v, '0px');
   const isVis = (c.threshold <= 0) ? (ratio > 0) : (ratio >= c.threshold);
   
   // Debug logging for tests
-  if (typeof console !== 'undefined' && console.log) {
-    console.log(`[fallback] ratio: ${ratio}, isVis: ${isVis}, _visible: ${this._visible}, _fbLastVis: ${this._fbLastVis}`);
-  }
-  
+  log(`[fallback] ratio: ${ratio}, isVis: ${isVis}, _visible: ${this._visible}, _fbLastVis: ${this._fbLastVis}`);
+
   // Fallback jitter guard: immediate action on visibility change
   if (this._fbLastVis !== isVis){
     this._fbLastVis = isVis;
@@ -429,7 +449,7 @@ Instance.prototype._checkVisibilityFallback = function(){
         }
       } else {
         if (c.pause.onHidden) {
-          console.log('[fallback] requesting pause due to hidden');
+          log('[fallback] requesting pause due to hidden');
           this._requestPause('hidden');
         }
       }
