@@ -8,7 +8,7 @@
 // Side effect: increment window.__ALPHA_INITED__ counter.
 
 export function init() {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     window.__ALPHA_INITED__ = (window.__ALPHA_INITED__ || 0) + 1;
   }
 }

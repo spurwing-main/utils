@@ -2,10 +2,10 @@
 
 A set of browser-native utilities providing modular, attribute-driven features for the web. The primary focus is on a declarative video feature that enables efficient management and lazy-loading of HTML `<video>` elements using custom attributes and delegated controls.
 
-- **Modular Loader:** Features are loaded dynamically via [`loader.js`](loader.js), using either the `data-features` attribute or programmatic [`bootstrap()`](loader.js) calls.
+- **Modular Loader:** Features are loaded dynamically via [`loader.js`](loader.js) using the `data-features` attribute.
 - **Attribute-Driven Video:** The video feature manages `<video>` elements declaratively, supporting lazy loading, custom controls, and event-driven behaviors through HTML attributes.
 - **Idempotent Initialization:** All features must export an idempotent `init()` function, ensuring safe repeated initialization.
-- **Debugging:** Enable namespaced logs via `data-debug`, `?utils-debug=*`, or `localStorage.setItem('utils:debug','*')`.
+- **Debugging:** Enable namespaced logs via `data-debug` or `localStorage.setItem('utils:debug','*')`.
 
 ## Key APIs
 
@@ -25,21 +25,9 @@ A set of browser-native utilities providing modular, attribute-driven features f
 </script>
 ```
 
-Query alternative:
+Programmatic bootstrapping is not required; features load via attributes only.
 
-```html
-<script type="module" src="/loader.js?features=video"></script>
-```
-
-## Quick Start (Programmatic)
-
-```html
-<script type="module">
-  import { bootstrap } from '/loader.js';
-  // Explicit list (skips auto attribute/query detection):
-  await bootstrap(['video']);
-</script>
-```
+<!-- Package imports not required; loading is attribute-driven only. -->
 
 ## CDN (jsDelivr)
 
@@ -47,7 +35,7 @@ Version-pinned (recommended):
 
 ```html
 <script type="module"
-src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.3/loader.js"
+src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.5/loader.js"
 data-features="video"
 data-debug="loader">
 </script>
@@ -56,17 +44,8 @@ data-debug="loader">
 Latest tag (auto-updating; not recommended for production stability):
 
 ```html
-<script type="module" src="https://cdn.jsdelivr.net/npm/@tim-spw/utils/loader.js"></script>
-```
-
-Programmatic import via CDN (including VERSION export):
-
-```html
-<script type="module">
-  import { bootstrap, VERSION } from 'https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.3/loader.js';
-  console.info('[utils] version', VERSION);
-  await bootstrap(['video']);
-  </script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/@tim-spw/utils/loader.js"
+  data-features="video"></script>
 ```
 
 Update the `@0.1.0` segment when publishing a new release; the exported `VERSION` constant mirrors [`package.json`](package.json).
@@ -88,10 +67,15 @@ Enable specific namespaces (comma separated):
 
 ## Features
 
-- **Video:** [`features/video`](features/video/) — Attribute-driven lazy loading and delegated controls for `<video>` elements. See [`features/video/README.md`](features/video/README.md) for full documentation and examples.
+- **Video:** Attribute-driven lazy loading and delegated controls for `<video>` elements. See this README for usage examples.
 
 ## Contributing
 
-For contributor guidelines, project policies, and development rules, see [`agent.md`](agent.md).
+For development rules and guidance, see [`agent.md`](agent.md).
+Quick commands:
+
+- Format: `npm run format`
+- Lint: `npm run lint`
+- Test: `npm test`
 
 All documentation and demo HTML are up-to-date and reflect the current implementation.

@@ -24,7 +24,7 @@ A concise set of repository-wide rules to keep code explicit, low complexity, an
 4. **Debug & Logging**
    - Use only the namespaced logger for verbose tracing.
    - `console.warn|error|info` allowed for surfaced operational issues; avoid `console.log` (lint warns).
-   - Enable via attribute, query, or localStorage (see Debugging section).
+   - Enable via attribute or localStorage (see Debugging section).
 
 5. **Side Effects & Imports**
    - No DOM mutations or network work at module top-level besides safe capability detection.
@@ -37,17 +37,17 @@ A concise set of repository-wide rules to keep code explicit, low complexity, an
 
 7. **Source Safety (Loader)**
    - Loader only accepts validated feature names (`^[a-z0-9_-]+$`).
-   - All normalization to lowercase before import.
-   - Caching prevents double initialization.
+   - Normalizes to lowercase before import and prevents double initialization.
 
 8. **Policy Exceptions**
    - Must include inline comment `// POLICY-EXCEPTION: reason`.
    - PR / commit message should reference why the rule is temporarily waived.
 
-9. **Lint Enforcement (See [`eslint.config.js`](eslint.config.js))**
-   - Modern JS only: `no-var`, `prefer-const`, shorthand objects, arrow callbacks.
-   - `no-empty` (no silent catch), `consistent-return`, `eqeqeq`.
-   - `no-console` (warns) except `warn|error|info`.
+9. **Lint & Format (Biome)**
+   - Single tool: Biome handles lint + format. See `biome.json`.
+   - Enforce modern JS: `no-var`, `prefer-const`, object shorthand, arrow callbacks.
+   - No silent failures: `no-empty` enforced; catches must log or return fallback.
+   - Console usage limited: allow `console.info|warn|error` only.
 
 10. **Testing Contract**
     - Feature tests assert only documented behavior (init idempotence, events, validation).
@@ -81,29 +81,28 @@ A concise set of repository-wide rules to keep code explicit, low complexity, an
 
 ### Lifecycle States
 
-1. **Discovered:** Name requested via attribute / query / programmatic list.
+1. **Discovered:** Name requested via attribute.
 2. **Imported:** Dynamic `import()` of [`index.js`](features/) resolved.
 3. **Initialized:** [`init()`](features/) invoked (at most once per agent name per page).
 4. **Active:** Runtime observers / listeners attached.
-5. **Error** (optional): Initialization failure captured and reported (loader surfaces `ok:false`).
-6. **Cached:** Subsequent load requests return prior result without re-import or re-init.
+5. **Error** (optional): Initialization failure contained and logged by the feature.
 
 ### Loader Interaction
 
-The loader ([`loader.js`](loader.js)) will:
+The loader ([`loader.js`](loader.js)) bootstraps via the `data-features` attribute only:
 
-- Normalize requested names to lowercase.
-- Deduplicate names.
-- Reject invalid names (`^[a-z0-9_-]+$` only).
-- Cache success & failure results.
-- Emit `CustomEvent('utils:feature-load', { detail: { name, ok, error? } })` for each attempt.
+- Reads feature names from the host script's `data-features`.
+- Normalizes names to lowercase and deduplicates.
+- Validates names (`^[a-z0-9_-]+$` only).
+- Initializes each feature at most once per page.
+- Does not emit loader-level events.
 
 ### Events
 
 If emitting DOM `CustomEvent`s:
 
 - Prefix with concise namespace (example: video feature uses `video:*`).
-- Payload object must be stable and documented in the feature README.
+- Payload object must be stable and documented in the root README.
 - Events SHOULD NOT throw; wrap dispatch in safe handling.
 
 ### Cross-Agent Independence
@@ -119,7 +118,7 @@ If emitting DOM `CustomEvent`s:
 
 ### Testing Expectations
 
-Tests (see [`test/loader.test.mjs`](test/loader.test.mjs)) should verify:
+Tests (see [`test/loader.test.js`](test/loader.test.js)) should verify:
 
 - Single initialization (idempotence).
 - Correct event emission (if applicable).
@@ -133,8 +132,8 @@ Tests (see [`test/loader.test.mjs`](test/loader.test.mjs)) should verify:
 - [ ] No silent catch blocks (each catch logs or documented with POLICY-EXCEPTION).
 - [ ] No top-level DOM mutations or premature network requests.
 - [ ] Debug logging gated by `__UTILS_DEBUG__`.
-- [ ] README section (or existing feature README updated) documenting attributes / API / events.
-- [ ] Lint passes (`npm run lint`).
+- [ ] Root README updated where applicable (attributes / API / events).
+- [ ] Lint/format passes (`npm run lint`, `npm run format`).
 - [ ] (If applicable) Tests updated or added.
 
 ### Agent Template
