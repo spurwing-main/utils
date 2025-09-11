@@ -6,8 +6,12 @@ node_modules/
 .npm-cache-tmp/
 .pnpm-store/
 
-# Lockfiles (this repo does not track them)
-package-lock.json
+# Lockfiles
+# We track npm's package-lock.json for deterministic CI installs and caching.
+# If using other managers, keep their lockfiles untracked unless you intend to switch.
+# package-lock.json (tracked)
+# pnpm-lock.yaml (ignored by default)
+# yarn.lock (ignored by default)
 pnpm-lock.yaml
 yarn.lock
 

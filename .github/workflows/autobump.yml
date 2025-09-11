@@ -33,6 +33,8 @@ jobs:
         with:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
 
       - name: Install deps (clean, reproducible)
         run: npm ci --no-audit --no-fund
