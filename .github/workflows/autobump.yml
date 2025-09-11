@@ -26,9 +26,13 @@ jobs:
         with:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Clean npm cache
+        run: npm cache clean --force
 
       - name: Install deps
-        run: npm ci || npm i
+        run: npm ci
 
       - name: Run checks (format, lint, tests)
         run: npm run check

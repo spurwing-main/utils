@@ -17,10 +17,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+          cache: 'npm'
+
+      - name: Clean npm cache
+        run: npm cache clean --force
 
       - name: Install deps (frozen)
-        run: npm ci || npm i
+        run: npm ci
 
       - name: Lint, format, test
         run: npm run check
-
