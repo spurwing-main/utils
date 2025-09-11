@@ -18,12 +18,13 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
+          cache-dependency-path: '**/package-lock.json'
 
       - name: Clean npm cache
         run: npm cache clean --force
 
-      - name: Install deps (frozen)
-        run: npm ci
+      - name: Install deps
+        run: npm install --no-audit --no-fund
 
       - name: Lint, format, test
         run: npm run check

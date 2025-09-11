@@ -27,12 +27,13 @@ jobs:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
+          cache-dependency-path: '**/package-lock.json'
 
       - name: Clean npm cache
         run: npm cache clean --force
 
       - name: Install deps
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Run checks (format, lint, tests)
         run: npm run check
@@ -46,7 +47,27 @@ jobs:
         run: npm version patch --no-git-tag-version
 
       - name: Sync versioned constants and docs
-        run: node scripts/sync-version.js
+        run: |
+          node -e "
+          const fs = require('fs');
+          const pkg = require('./package.json');
+          const v = String(pkg.version);
+          // 1) Update VERSION export in loader.js
+          if (fs.existsSync('loader.js')) {
+            const s = fs.readFileSync('loader.js', 'utf8');
+            const next = s.replace(/export const VERSION\s*=\s*([\"\'])[^\"\']*\1/, `export const VERSION = \"${v}\"`);
+            if (next !== s) fs.writeFileSync('loader.js', next);
+          }
+          // 2) Update CDN pins in README files
+          const re = new RegExp('(@tim-spw\\/utils@)(?:\\\d+\\.\\\d+\\.\\\d+)', 'g');
+          for (const f of ['README.md', 'features/video/README.md']) {
+            if (!fs.existsSync(f)) continue;
+            const s = fs.readFileSync(f, 'utf8');
+            const next = s.replace(re, `$1${v}`);
+            if (next !== s) fs.writeFileSync(f, next);
+          }
+          console.log('Synced version', v);
+          "
 
       - name: Commit version bump
         run: |

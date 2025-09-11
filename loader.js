@@ -6,7 +6,9 @@ function hostScript() {
     try {
       const abs = new URL(s.src, document.baseURI).href;
       if (abs === here) return s;
-    } catch {}
+    } catch {
+      // POLICY: ignore invalid script src URL while scanning for host script
+    }
   }
   return null;
 }
