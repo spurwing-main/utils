@@ -118,7 +118,7 @@ If emitting DOM `CustomEvent`s:
 
 ### Testing Expectations
 
-Tests (see [`test/loader.test.js`](test/loader.test.js)) should verify:
+Tests (see `test/*`) should verify:
 
 - Single initialization (idempotence).
 - Correct event emission (if applicable).
@@ -165,3 +165,4 @@ export default { init };
 ## Feature Naming Policy
 
 All feature directory names are lowercase. The loader normalizes requested feature names to lowercase and only accepts: `[a-z0-9_-]+`. (Example: request `Video` → loads `video`.)
+

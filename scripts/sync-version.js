@@ -37,8 +37,8 @@ function main() {
     process.exit(1);
   }
 
-  // 1) Sync VERSION export in loader.js
-  replaceInFile("loader.js", [[/(export const VERSION\s*=\s*')[^']*(')/g, `$1${v}$2`]]);
+  // 1) Sync VERSION export in loader.js (supports single or double quotes)
+  replaceInFile("loader.js", [[/(export const VERSION\s*=\s*["'])[^"]*(["'])/g, `$1${v}$2`]]);
 
   // 2) Update pinned CDN references in README files
   const pkgName = "@tim-spw/utils";

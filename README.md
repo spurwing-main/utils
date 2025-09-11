@@ -1,11 +1,16 @@
 # utils
 
-A set of browser-native utilities providing modular, attribute-driven features for the web. The primary focus is on a declarative video feature that enables efficient management and lazy-loading of HTML `<video>` elements using custom attributes and delegated controls.
+A set of browser-native utilities providing modular, attribute-driven features for the web. 
 
 - **Modular Loader:** Features are loaded dynamically via [`loader.js`](loader.js) using the `data-features` attribute.
-- **Attribute-Driven Video:** The video feature manages `<video>` elements declaratively, supporting lazy loading, custom controls, and event-driven behaviors through HTML attributes.
 - **Idempotent Initialization:** All features must export an idempotent `init()` function, ensuring safe repeated initialization.
 - **Debugging:** Enable namespaced logs via `data-debug` or `localStorage.setItem('utils:debug','*')`.
+
+## Compatibility and Scope
+
+- **Attribute‑only loader:** The loader has no programmatic API (no `loadFeatures()` / `bootstrap()`). Enable features declaratively via the script tag’s `data-features` attribute.
+- **Modern browsers only:** Visibility‑driven behavior requires `IntersectionObserver`. There is no legacy fallback path; pointer‑driven interactions still work in environments with `(hover: hover) and (pointer: fine)`.
+- **Validation & safety:** Feature names are normalized to lowercase and validated (`^[a-z0-9_-]+$`) before import.
 
 ## Key APIs
 
@@ -27,6 +32,8 @@ A set of browser-native utilities providing modular, attribute-driven features f
 
 Programmatic bootstrapping is not required; features load via attributes only.
 
+Note: The loader intentionally exposes no public programmatic API. Use attributes to opt‑in to features.
+
 <!-- Package imports not required; loading is attribute-driven only. -->
 
 ## CDN (jsDelivr)
@@ -35,7 +42,7 @@ Version-pinned (recommended):
 
 ```html
 <script type="module"
-src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.5/loader.js"
+src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.7/loader.js"
 data-features="video"
 data-debug="loader">
 </script>
@@ -49,6 +56,13 @@ Latest tag (auto-updating; not recommended for production stability):
 ```
 
 Update the `@0.1.0` segment when publishing a new release; the exported `VERSION` constant mirrors [`package.json`](package.json).
+
+## Publishing (CI)
+
+Lean flow: just push to `main`.
+
+- The autobump action runs checks (format, lint, tests), bumps the patch version, syncs versioned constants and pinned CDN links, commits "Release vX.Y.Z [ci release]", pushes, and publishes to npm.
+- Requirements: set `NPM_TOKEN` repo secret with publish permission.
 
 ## Debugging
 
@@ -71,7 +85,7 @@ Enable specific namespaces (comma separated):
 
 ## Contributing
 
-For development rules and guidance, see [`agent.md`](agent.md).
+For development rules and guidance, see [`AGENTS.md`](AGENTS.md).
 Quick commands:
 
 - Format: `npm run format`

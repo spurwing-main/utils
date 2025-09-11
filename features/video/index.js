@@ -1,4 +1,4 @@
-/* Video Feature – see README.md for usage and agent.md for rules. */
+/* Video Feature – see README.md for usage and AGENTS.md for rules. */
 
 import { isVideo, getDOC } from "./internal/internal-utils.js";
 import { Instance } from "./internal/instance.js";

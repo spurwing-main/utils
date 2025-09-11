@@ -398,13 +398,6 @@ Instance.prototype._ensureLoaded = function (trigger) {
         logError("teardown IO after load failed", e);
       }
       this.io = null;
-    } else {
-      // Using fallback - remove from VIEW_FALLBACK if no visibility behavior needed
-      try {
-        this._VIEW_FALLBACK.remove(this);
-      } catch (e) {
-        logError("VIEW_FALLBACK remove failed", e);
-      }
     }
   }
 };

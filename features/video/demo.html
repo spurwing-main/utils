@@ -44,12 +44,18 @@
     </style>
 
     <script>
-      // Optional IO toggle via query: ?noio=1
+      // Optional query helpers for the demo page only
       (function(){
         try {
           const params = new URL(location.href).searchParams;
+          // IO toggle via ?noio=1
           if (params.get('noio') === '1') {
             window.IntersectionObserver = undefined;
+          }
+          // Debug namespaces via ?utils-debug=video,loader or *=all
+          const dbg = params.get('utils-debug');
+          if (dbg != null) {
+            try { localStorage.setItem('utils:debug', dbg); } catch(_) {}
           }
         } catch(e){}
       })();

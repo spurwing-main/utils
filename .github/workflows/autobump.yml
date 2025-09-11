@@ -1,0 +1,57 @@
+name: autobump
+
+on:
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: autobump-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  bump-and-publish:
+    if: ${{ !contains(github.event.head_commit.message, '[ci release]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install deps
+        run: npm ci || npm i
+
+      - name: Run checks (format, lint, tests)
+        run: npm run check
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump patch version (no tag)
+        run: npm version patch --no-git-tag-version
+
+      - name: Sync versioned constants and docs
+        run: node scripts/sync-version.js
+
+      - name: Commit version bump
+        run: |
+          V=$(node -p "require('./package.json').version")
+          git add -A
+          git commit -m "Release v$V [ci release]"
+          git push
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public

@@ -9,7 +9,7 @@ Attribute‑driven, lazy‑loading `<video>` with delegated controls and a small
 - Small API (`Video.*`) for manual control when needed
 - Namespaced custom events (`video:*`) for UI hooks
 
-> Note: This feature targets modern browsers with IntersectionObserver. There is no legacy fallback.
+> Note: This feature targets modern browsers with IntersectionObserver. There is no legacy fallback. The loader is attribute‑only; enable the feature via the host `<script data-features="video">` (there is no programmatic loader API).
 
 ---
 
@@ -20,7 +20,7 @@ Include the loader and enable the `video` feature:
 ```html
 <!-- CDN example (pin a version in production) -->
 <script type="module"
-  src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.5/loader.js"
+  src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.7/loader.js"
   data-features="video"
   data-debug="video"><!-- remove data-debug in prod --></script>
 ```
@@ -58,7 +58,7 @@ Video.ensureLoaded(v);
 Video.play(v);
 ```
 
-See a comprehensive, runnable showcase in `features/video/demo.html`.
+See a comprehensive, runnable showcase in `features/video/demo.html`. For development guidelines, see [`AGENTS.md`](../../AGENTS.md).
 
 ---
 
@@ -248,4 +248,3 @@ init(); // sets up auto-attach, mutation observer, and delegated controls
 ## License
 
 MIT — see repository root.
-
