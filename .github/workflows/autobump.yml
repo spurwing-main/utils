@@ -27,7 +27,7 @@ jobs:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
-          cache-dependency-path: '**/package-lock.json'
+                    cache-dependency-path: 'package.json'
 
       - name: Clean npm cache
         run: npm cache clean --force
