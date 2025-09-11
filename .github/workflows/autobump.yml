@@ -26,14 +26,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
-          cache-dependency-path: 'package-lock.json'
 
       - name: Install deps (clean, reproducible)
         run: npm ci --no-audit --no-fund
@@ -73,6 +72,7 @@ jobs:
           "
 
       - name: Commit version bump
+        continue-on-error: true
         run: |
           V=$(node -p "require('./package.json').version")
           git add -A
@@ -85,4 +85,5 @@ jobs:
 
       - name: Publish to npm
         if: ${{ env.NODE_AUTH_TOKEN != '' }}
+        continue-on-error: true
         run: npm publish --access public

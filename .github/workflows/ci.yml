@@ -17,8 +17,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: 'package-lock.json'
 
       - name: Install deps (clean, reproducible)
         run: npm ci --no-audit --no-fund
