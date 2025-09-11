@@ -55,11 +55,11 @@ jobs:
           // 1) Update VERSION export in loader.js
           if (fs.existsSync('loader.js')) {
             const s = fs.readFileSync('loader.js', 'utf8');
-            const next = s.replace(/export const VERSION\s*=\s*([\"\'])[^\"\']*\1/, `export const VERSION = \"${v}\"`);
+                      const next = s.replace(/export const VERSION\s*=\s*(["'])([^"']*)\1/, `export const VERSION = "${v}"`);
             if (next !== s) fs.writeFileSync('loader.js', next);
           }
           // 2) Update CDN pins in README files
-          const re = new RegExp('(@tim-spw\\/utils@)(?:\\\d+\\.\\\d+\\.\\\d+)', 'g');
+          const re = new RegExp('(@tim-spw\/utils@)(?:\d+\.\d+\.\d+)', 'g');
           for (const f of ['README.md', 'features/video/README.md']) {
             if (!fs.existsSync(f)) continue;
             const s = fs.readFileSync(f, 'utf8');

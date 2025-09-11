@@ -564,7 +564,7 @@ test("delegated controls: invalid selector handling", async () => {
   // Button with invalid CSS selector
   const invalidBtn = window.document.createElement("button");
   invalidBtn.setAttribute("data-video-action", "play");
-  invalidBtn.setAttribute("data-video-target", "/////invalid\\\\\\selector[bad]");
+  invalidBtn.setAttribute("data-video-target", "/////invalid\\selector[bad]");
   window.document.body.appendChild(invalidBtn);
 
   const mod = await importVideoFeatureFresh();
@@ -837,7 +837,8 @@ test("data-video-muted: enforces muted and prevents unmuted retry", async () => 
   video2.pause = () => {};
   const events2 = collectVideoEvents(video2);
 
-  // Attach via public API (Video is imported earlier in this test file)
+  const mod2 = await importVideoFeatureFresh();
+  const Video = mod2.Video;
   Video.attach(video2);
   await new Promise((r) => setTimeout(r, 5));
   // Simulate gesture
