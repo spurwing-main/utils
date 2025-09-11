@@ -13,11 +13,13 @@ concurrency:
 
 jobs:
   bump-and-publish:
-    # Only run on direct pushes to main/master, skip release commits, and ensure NPM_TOKEN exists
+    # Only run on direct pushes to main/master; skip release commits.
+    # Note: secrets are not available in job-level if. Guard publish at step-level.
     if: >-
       ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-      && !contains(github.event.head_commit.message, '[ci release]')
-      && (secrets.NPM_TOKEN != '') }}
+      && !contains(github.event.head_commit.message, '[ci release]') }}
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,7 +33,9 @@ jobs:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
-          cache-dependency-path: 'package-lock.json'
+          cache-dependency-path: |
+            package-lock.json
+            **/package-lock.json
 
       - name: Install deps (clean, reproducible)
         run: npm ci --no-audit --no-fund
@@ -77,7 +81,10 @@ jobs:
           git commit -m "Release v$V [ci release]"
           git push
 
+      - name: Skip publish (missing token)
+        if: ${{ env.NODE_AUTH_TOKEN == '' }}
+        run: echo "NPM_TOKEN not set; skipping publish."
+
       - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        if: ${{ env.NODE_AUTH_TOKEN != '' }}
         run: npm publish --access public
