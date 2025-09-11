@@ -52,7 +52,7 @@ jobs:
 
       - name: Sync versioned constants and docs
         run: |
-          node -e "
+          node <<'NODE'
           const fs = require('fs');
           const pkg = require('./package.json');
           const v = String(pkg.version);
@@ -71,7 +71,7 @@ jobs:
             if (next !== s) fs.writeFileSync(f, next);
           }
           console.log('Synced version', v);
-          "
+          NODE
 
       - name: Commit version bump
         continue-on-error: true
