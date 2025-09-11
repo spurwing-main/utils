@@ -18,13 +18,10 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-                    cache-dependency-path: 'package.json'
+          cache-dependency-path: 'package-lock.json'
 
-      - name: Clean npm cache
-        run: npm cache clean --force
-
-      - name: Install deps
-        run: npm install --no-audit --no-fund
+      - name: Install deps (clean, reproducible)
+        run: npm ci --no-audit --no-fund
 
       - name: Lint, format, test
         run: npm run check
