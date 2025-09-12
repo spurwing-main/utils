@@ -1,8 +1,12 @@
 {
   "name": "@tim-spw/utils",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "type": "module",
-  "files": ["loader.js", "features/video/**/*.js", "README.md"],
+  "files": [
+    "loader.js",
+    "features/video/**/*.js",
+    "README.md"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -18,7 +22,10 @@
     "./video": "./features/video/index.js",
     "./features/*": "./features/*"
   },
-  "sideEffects": ["loader.js", "features/**"],
+  "sideEffects": [
+    "loader.js",
+    "features/**"
+  ],
   "engines": {
     "node": ">=18"
   },
