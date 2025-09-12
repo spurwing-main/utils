@@ -4,7 +4,10 @@ export const A = Object.freeze({
   SRC: "data-video-src",
   SRC_MOB: "data-video-mob-src",
   PRELOAD: "data-video-preload",
-  RESTART: "data-video-play-restart",
+  // New restart policy: space-separated tokens (finished, pointer-on, scroll)
+  RESTART_WHEN: "data-video-restart-when",
+  // Legacy boolean restart (pointer-on semantics); still recognized for backward compatibility
+  RESTART_LEGACY: "data-video-play-restart",
   LOAD_WHEN: "data-video-load-when",
   PLAY_WHEN: "data-video-play-when",
   PAUSE_WHEN: "data-video-pause-when",

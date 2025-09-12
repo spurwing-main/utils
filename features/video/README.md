@@ -79,7 +79,9 @@ Use these attributes on `<video>` to control when it loads/plays/pauses and how 
 - `data-video-scroll-margin` (optional): IntersectionObserver `rootMargin` string. Default `300px 0px`.
 - `data-video-parent-pointer` (optional): CSS selector used to bind pointer events on an ancestor container instead of the `<video>` itself. Useful for cards.
   - Ownership rule: Only the first managed descendant in the container binds pointer events; siblings ignore pointer tokens. Removing the owner releases the claim.
-- `data-video-play-restart` (optional, presence‑based): When using pointer triggers, restart from time `0` when pointer returns after a `pointer-off` pause.
+- `data-video-restart-when` (optional): Space‑separated tokens that control when playback should restart from the beginning (`currentTime = 0`) and immediately play again.
+  - Tokens: `finished` (restart on `ended`), `pointer-on` (restart whenever pointer enters scope), `scroll` (alias of `visible`; restart when becoming visible via IntersectionObserver).
+  - Combinations: tokens can be combined. Example: `finished pointer-on` loops while the pointer is over the element and, if you leave and re‑enter, it starts from the beginning again.
 - `data-video-muted` (optional, presence‑based): Enforce muted at all times. Disables the “try unmuted once then retry muted” behavior for pointer plays.
 
 Notes:
@@ -181,7 +183,7 @@ init(); // sets up auto-attach, mutation observer, and delegated controls
 - Visibility rules: `visible`/`hidden` use IntersectionObserver with your configured `threshold` and `rootMargin`.
   - Pause wins over play in the same frame unless a high‑priority pointer‑on occurred in the last ~120ms.
   - If paused because it became hidden, becoming visible resumes if allowed; pointer‑off pauses are not auto‑resumed by visibility alone.
-- Pointer scope: Bind on `data-video-parent-pointer` container if provided; otherwise on the `<video>` itself. Only the first managed descendant in a container binds pointer events.
+  - Pointer scope: Bind on `data-video-parent-pointer` container if provided; otherwise on the `<video>` itself. Only the first managed descendant in a container binds pointer events.
 - Environment gating: Pointer triggers are disabled on devices without hover/fine pointer. Visibility triggers require IntersectionObserver.
 - Attribute changes: Changing `data-video-*` after attach does not auto‑reconfigure. Call `Video.refresh(el)`.
 - DOM lifecycle: Removing a managed `<video>` detaches it automatically via MutationObserver.
@@ -199,7 +201,7 @@ init(); // sets up auto-attach, mutation observer, and delegated controls
     data-video-load-when="pointer-on"
     data-video-play-when="pointer-on"
     data-video-pause-when="pointer-off"
-    data-video-play-restart
+    data-video-restart-when="finished pointer-on"
   ></video>
 </article>
 ```
@@ -214,6 +216,7 @@ init(); // sets up auto-attach, mutation observer, and delegated controls
   data-video-pause-when="hidden"
   data-video-scroll-threshold="half"
   data-video-scroll-margin="300px 0px"
+  data-video-restart-when="scroll"
   muted
 ></video>
 ```

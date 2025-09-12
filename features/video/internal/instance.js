@@ -113,6 +113,7 @@ export function Instance(video, { INSTANCES, CONTAINER_CLAIMS }) {
   this._visible = null; // tri-state: null unknown, boolean known
   this._pausedByHidden = false;
   this._pausedByPointerOff = false;
+  this._pointerOn = false; // live state of pointer within bound scope
   this._containerBound = null; // element with listeners bound (video or container)
   this._containerOwns = false; // whether this instance owns the container per rule 4
   this._errorTriedAlt = false;
@@ -145,8 +146,26 @@ Instance.prototype._readConfig = function () {
     preloadRaw === "auto" || preloadRaw === "metadata" || preloadRaw === "none"
       ? preloadRaw
       : "metadata";
-  // Restart on pointer-on after pointer-off
-  const restart = v.hasAttribute(A.RESTART);
+  // Restart policies: new multi-token API with back-compat for legacy boolean
+  const restartTokens = parseTokens(v.getAttribute(A.RESTART_WHEN));
+  const restartWhen = {
+    finished: restartTokens.includes("finished"),
+    onPointer: restartTokens.includes("pointer-on"),
+    // Accept both 'scroll' and 'visible' as visibility-driven restart
+    onVisible: restartTokens.includes("scroll") || restartTokens.includes("visible"),
+  };
+  // Legacy boolean attribute mapped to pointer-on restart
+  if (!restartWhen.onPointer && v.hasAttribute(A.RESTART_LEGACY)) {
+    restartWhen.onPointer = true;
+    try {
+      logError(
+        "legacy data-video-play-restart detected; treating as pointer-on restart",
+        null,
+      );
+    } catch {
+      /* POLICY-EXCEPTION: debug logger unavailable */
+    }
+  }
   // Force muted when present
   const muted = v.hasAttribute(A.MUTED);
 
@@ -167,8 +186,8 @@ Instance.prototype._readConfig = function () {
     margin,
     parentPointer,
     preload,
-    // Whether to restart playback when pointer returns after pointer-off pause
-    restart,
+    // Restart policy flags
+    restartWhen,
     pointerEnabled: envHasHover(),
     srcPrimary,
     srcMobile,
@@ -281,23 +300,40 @@ Instance.prototype._setup = function () {
   this._destroyFns.push(() => {
     v.removeEventListener("playing", onPlaying);
   });
+  // Restart on finished when configured; optionally gated by pointer presence
+  const onEnded = () => {
+    const c = this.cfg;
+    if (!c?.restartWhen?.finished) return;
+    if (c.restartWhen.onPointer && !this._pointerOn) return;
+    try {
+      v.currentTime = 0;
+    } catch {
+      /* POLICY-EXCEPTION: cannot reset currentTime on ended */
+    }
+    this._requestPlay("finished");
+  };
+  v.addEventListener("ended", onEnded);
+  this._destroyFns.push(() => v.removeEventListener("ended", onEnded));
 };
 
 Instance.prototype._bindPointer = function (target) {
   const c = this.cfg;
   const onEnter = () => {
+    this._pointerOn = true;
     // Load if requested
     if (c.load.onPointer) this._ensureLoaded("pointer-on");
     // Play if requested
     if (c.play.onPointer) this._requestPlay("pointer-on", /*priority*/ true);
   };
   const onLeave = () => {
+    this._pointerOn = false;
     if (c.pause.onPointerOff) {
       this._requestPause("pointer-off");
       this._pausedByPointerOff = true;
     }
   };
   const onCancel = () => {
+    this._pointerOn = false;
     if (c.pause.onPointerOff) {
       this._requestPause("pointer-off");
       this._pausedByPointerOff = true;
@@ -414,8 +450,8 @@ Instance.prototype._requestPlay = function (trigger, priority = false) {
   emit(v, "video:play-request", { trigger });
   log("[video] play-request", trigger);
 
-  // Restart if pointer-on after pointer-off pause and restart is enabled
-  if (trigger === "pointer-on" && this.cfg.restart && this._pausedByPointerOff) {
+  // Restart on pointer-on when configured
+  if (trigger === "pointer-on" && this.cfg?.restartWhen?.onPointer) {
     try {
       this.v.currentTime = 0;
     } catch (e) {
@@ -535,7 +571,16 @@ Instance.prototype._onIntersect = function (entries) {
     }
   } else if (playNow) {
     // Resume rule: if paused because hidden and visible is allowed, resume
-    if (this._pausedByHidden || this.v.paused) this._requestPlay("visible");
+    if (this._pausedByHidden || this.v.paused) {
+      if (c?.restartWhen?.onVisible) {
+        try {
+          v.currentTime = 0;
+        } catch {
+          /* POLICY-EXCEPTION: cannot set currentTime on visible */
+        }
+      }
+      this._requestPlay("visible");
+    }
     this._pausedByHidden = false;
     // visibility alone must NOT resume if paused because pointer-off
   }

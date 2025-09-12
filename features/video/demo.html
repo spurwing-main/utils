@@ -405,14 +405,13 @@
           </div>
         </article>
 
-        <!-- I1: Restart on pointer-on after pointer-off -->
+        <!-- I1: Restart when finished + pointer-on (loop while hover) -->
         <article class="card">
           <header>
-            <h3>I1: restart on pointer-on</h3>
+            <h3>I1: restart on finished + pointer-on</h3>
             <p>
-              <strong>Pattern:</strong> pointer-on loads/plays/restarts, pointer-off pauses<br>
-              <code>data-video-play-restart</code> enables restart instead of continuing from pause point<br>
-              Mouse over to play, out to pause, over again to restart from beginning.
+              <strong>Pattern:</strong> pointer-on loads/plays; while pointer is on, the video restarts on finish (loop). Pointer-off pauses. Pointer-on again restarts from the beginning.<br>
+              Use <code>data-video-restart-when="finished pointer-on"</code>.
             </p>
           </header>
           <div class="media">
@@ -421,7 +420,7 @@
               data-video-load-when="pointer-on"
               data-video-play-when="pointer-on"
               data-video-pause-when="pointer-off"
-              data-video-play-restart
+              data-video-restart-when="finished pointer-on"
             ></video></div>
           </div>
           <div class="controls">
