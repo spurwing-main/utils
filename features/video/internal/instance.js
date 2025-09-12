@@ -158,10 +158,7 @@ Instance.prototype._readConfig = function () {
   if (!restartWhen.onPointer && v.hasAttribute(A.RESTART_LEGACY)) {
     restartWhen.onPointer = true;
     try {
-      logError(
-        "legacy data-video-play-restart detected; treating as pointer-on restart",
-        null,
-      );
+      logError("legacy data-video-play-restart detected; treating as pointer-on restart", null);
     } catch {
       /* POLICY-EXCEPTION: debug logger unavailable */
     }
