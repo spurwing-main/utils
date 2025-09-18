@@ -71,6 +71,14 @@ A concise set of repository-wide rules to keep code explicit, low complexity, an
 - [`init()`](features/) MUST be idempotent (multiple calls cause no harmful side effects).
 - No module-top DOM mutations or network requests; defer to [`init()`](features/).
 
+### Repository Structure
+
+- Single-file by default per feature: `features/<name>/index.js` exporting `init()` (and optional API).
+- Add `features/<name>/core.js` only when `index.js` approaches ~200 lines or mixes distinct concerns (config parsing, instance logic, etc.).
+- Add `features/<name>/document-hooks.js` only when document-level listeners (delegated controls, observers) exceed ~80 lines or benefit from isolation.
+- Avoid nested `internal/` directories; keep paths flat and obvious.
+- Filenames are lowercase; dashes avoided unless readability clearly benefits.
+
 ### Init Contract
 
 [`init()`](features/):
@@ -159,10 +167,9 @@ export default { init };
 
 ### Future Enhancements
 
-- Optional shared `safe()` micro utility in a common location if multiple agents converge on the same guarded pattern.
 - Metrics hook (debug only) for measuring attach / init durations.
+- Prefer per-feature micro-helpers over cross-feature shared modules to keep structure simple. Duplicate tiny helpers if it reduces coupling and file hopping.
 
 ## Feature Naming Policy
 
 All feature directory names are lowercase. The loader normalizes requested feature names to lowercase and only accepts: `[a-z0-9_-]+`. (Example: request `Video` → loads `video`.)
-
