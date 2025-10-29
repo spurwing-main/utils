@@ -42,7 +42,8 @@ function installDebuggerFromAttribute(scriptElement) {
   const debugValue = attributeValue !== null ? attributeValue : localStorageValue;
   if (debugValue === null) return; // opt-in only
 
-  const enableAll = debugValue === "" || debugValue === "*" || debugValue === "true" || debugValue === "1";
+  const enableAll =
+    debugValue === "" || debugValue === "*" || debugValue === "true" || debugValue === "1";
   const enabledNamespaces = enableAll ? null : new Set(parseList(debugValue));
 
   window.__UTILS_DEBUG__ = {
