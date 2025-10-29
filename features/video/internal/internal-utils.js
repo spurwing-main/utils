@@ -49,69 +49,80 @@ export function viewRatio(el, marginStr) {
   }
 
   // Get the bounding rectangle of the element
-  const r = el.getBoundingClientRect();
-  // Get viewport width and height with fallbacks
-  const iw = getWIN().innerWidth || getDOC()?.documentElement?.clientWidth || 0;
-  const ih = getWIN().innerHeight || getDOC()?.documentElement?.clientHeight || 0;
+  const rect = el.getBoundingClientRect();
+  // Get viewport dimensions with fallbacks
+  const viewportWidth = getWIN().innerWidth || getDOC()?.documentElement?.clientWidth || 0;
+  const viewportHeight = getWIN().innerHeight || getDOC()?.documentElement?.clientHeight || 0;
 
   // Robustly parse margin string into numeric px values
-  const parts = String(marginStr || "")
+  const marginParts = String(marginStr || "")
     .trim()
     .split(/\s+/)
-    .map((x) => {
+    .map((part) => {
       // Extract numeric value from px units, fallback to 0 for invalid values
-      const parsed = Number.parseFloat(String(x).replace(/px$/, "").trim());
+      const parsed = Number.parseFloat(String(part).replace(/px$/, "").trim());
       return Number.isFinite(parsed) ? parsed : 0;
     })
     .filter((val) => Number.isFinite(val)); // Remove any remaining invalid values
 
-  let t = 0;
-  let rgt = 0;
-  let b = 0;
-  let l = 0;
   // Expand CSS margin shorthand (1-4 values) to top, right, bottom, left
-  if (parts.length >= 1) {
-    t = rgt = b = l = parts[0];
+  let top = 0;
+  let right = 0;
+  let bottom = 0;
+  let left = 0;
+
+  if (marginParts.length >= 1) {
+    top = right = bottom = left = marginParts[0];
   }
-  if (parts.length >= 2) {
-    t = b = parts[0];
-    rgt = l = parts[1];
+  if (marginParts.length >= 2) {
+    top = bottom = marginParts[0];
+    right = left = marginParts[1];
   }
-  if (parts.length >= 3) {
-    t = parts[0];
-    rgt = l = parts[1];
-    b = parts[2];
+  if (marginParts.length >= 3) {
+    top = marginParts[0];
+    right = left = marginParts[1];
+    bottom = marginParts[2];
   }
-  if (parts.length >= 4) {
-    t = parts[0];
-    rgt = parts[1];
-    b = parts[2];
-    l = parts[3];
+  if (marginParts.length >= 4) {
+    top = marginParts[0];
+    right = marginParts[1];
+    bottom = marginParts[2];
+    left = marginParts[3];
   }
 
   // Calculate the viewport rectangle with margins applied
-  const vw = { top: -t, left: -l, right: iw + rgt, bottom: ih + b };
+  const viewport = {
+    top: -top,
+    left: -left,
+    right: viewportWidth + right,
+    bottom: viewportHeight + bottom,
+  };
 
   // Find intersection rectangle between element and viewport (with NaN guards)
-  const interLeft = Math.max(r.left || 0, vw.left);
-  const interTop = Math.max(r.top || 0, vw.top);
-  const interRight = Math.min(r.right || 0, vw.right);
-  const interBottom = Math.min(r.bottom || 0, vw.bottom);
+  const intersectionLeft = Math.max(rect.left || 0, viewport.left);
+  const intersectionTop = Math.max(rect.top || 0, viewport.top);
+  const intersectionRight = Math.min(rect.right || 0, viewport.right);
+  const intersectionBottom = Math.min(rect.bottom || 0, viewport.bottom);
 
-  const interW = Math.max(0, interRight - interLeft);
-  const interH = Math.max(0, interBottom - interTop);
+  const intersectionWidth = Math.max(0, intersectionRight - intersectionLeft);
+  const intersectionHeight = Math.max(0, intersectionBottom - intersectionTop);
 
   // If no intersection or invalid dimensions, ratio is 0
-  if (interW <= 0 || interH <= 0 || !Number.isFinite(interW) || !Number.isFinite(interH)) {
+  if (
+    intersectionWidth <= 0 ||
+    intersectionHeight <= 0 ||
+    !Number.isFinite(intersectionWidth) ||
+    !Number.isFinite(intersectionHeight)
+  ) {
     return 0;
   }
 
   // Calculate area of the element with protection against zero/negative values
-  const elementWidth = Math.max(0, r.width || 0);
-  const elementHeight = Math.max(0, r.height || 0);
-  const area = Math.max(1, elementWidth * elementHeight); // prevent division by zero
+  const elementWidth = Math.max(0, rect.width || 0);
+  const elementHeight = Math.max(0, rect.height || 0);
+  const elementArea = Math.max(1, elementWidth * elementHeight); // prevent division by zero
 
   // Return the ratio of intersection area to element area, with NaN guard
-  const ratio = (interW * interH) / area;
+  const ratio = (intersectionWidth * intersectionHeight) / elementArea;
   return Number.isFinite(ratio) ? ratio : 0;
 }

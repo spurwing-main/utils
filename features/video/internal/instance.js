@@ -9,13 +9,10 @@ import {
   parseThresholdInput,
   parseRootMargin,
   closest,
-  getWIN,
-  getDOC,
+  getWIN as getWin,
+  getDOC as getDoc,
 } from "./internal-utils.js";
 import { A, logError } from "./constants.js";
-
-const getWin = getWIN;
-const getDoc = getDOC;
 const PRIORITY_PLAY_MS = 120; // pointer-on priority window to override hidden-pause
 
 function emit(el, name, detail) {

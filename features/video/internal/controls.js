@@ -12,89 +12,89 @@ function warn(...args) {
 }
 
 // Delegated controls - these handlers require INSTANCES to be passed
-export function onControlClick(e, Video, INSTANCES) {
-  const target = resolveActionFromEvent(e, INSTANCES);
+export function onControlClick(event, Video, INSTANCES) {
+  const target = resolveActionFromEvent(event, INSTANCES);
   if (!target) return;
   const action = String(target.action || "").toLowerCase();
-  const vids = target.videos;
-  for (let i = 0; i < vids.length; i++) {
-    const v = vids[i];
-    if (action === "play") Video.play(v);
-    else if (action === "pause") Video.pause(v);
-    else Video.toggle(v);
+  const videos = target.videos;
+  for (let i = 0; i < videos.length; i++) {
+    const video = videos[i];
+    if (action === "play") Video.play(video);
+    else if (action === "pause") Video.pause(video);
+    else Video.toggle(video);
   }
-  e.preventDefault?.();
-  e.stopPropagation?.();
+  event.preventDefault?.();
+  event.stopPropagation?.();
 }
 
-export function onControlKeydown(e, Video, INSTANCES) {
-  const key = e.key || e.code;
+export function onControlKeydown(event, Video, INSTANCES) {
+  const key = event.key || event.code;
   if (key !== "Enter" && key !== " " && key !== "Spacebar") return;
-  onControlClick(e, Video, INSTANCES);
+  onControlClick(event, Video, INSTANCES);
 }
 
-function resolveActionTarget(start, INSTANCES) {
+function resolveActionTarget(startElement, INSTANCES) {
   const doc = getDOC();
-  let el = start;
-  while (el && el !== doc?.documentElement) {
-    if (el?.hasAttribute?.(A.ACTION)) {
-      const action = el.getAttribute(A.ACTION);
-      const sel = el.getAttribute(A.TARGET);
-      let vids = [];
-      if (sel) {
+  let element = startElement;
+  while (element && element !== doc?.documentElement) {
+    if (element?.hasAttribute?.(A.ACTION)) {
+      const action = element.getAttribute(A.ACTION);
+      const selector = element.getAttribute(A.TARGET);
+      let targetVideos = [];
+      if (selector) {
         try {
-          vids = Array.from(doc.querySelectorAll(sel)).filter(
-            (n) => isVideo(n) && INSTANCES.has(n),
+          targetVideos = Array.from(doc.querySelectorAll(selector)).filter(
+            (node) => isVideo(node) && INSTANCES.has(node),
           );
         } catch {
           /* POLICY-EXCEPTION: invalid selector; fallback to nearest video */
         }
       }
-      if (!vids.length) {
+      if (!targetVideos.length) {
         // nearest or descendant managed video (instance exists)
-        let p = el;
-        while (p && p !== doc.documentElement) {
-          if (isVideo(p) && INSTANCES.has(p)) {
-            vids = [p];
+        let parent = element;
+        while (parent && parent !== doc.documentElement) {
+          if (isVideo(parent) && INSTANCES.has(parent)) {
+            targetVideos = [parent];
             break;
           }
-          const list = p.querySelectorAll?.("video");
-          if (list?.length) {
-            for (let i = 0; i < list.length; i++) {
-              const node = list[i];
-              if (INSTANCES.has(node)) {
-                vids = [node];
+          const videoList = parent.querySelectorAll?.("video");
+          if (videoList?.length) {
+            for (let i = 0; i < videoList.length; i++) {
+              const videoNode = videoList[i];
+              if (INSTANCES.has(videoNode)) {
+                targetVideos = [videoNode];
                 break;
               }
             }
-            if (vids.length) break;
+            if (targetVideos.length) break;
           }
-          p = p.parentElement;
+          parent = parent.parentElement;
         }
       }
-      if (!vids.length) {
+      if (!targetVideos.length) {
         warn("[video] control activated but no target video found");
         return null;
       }
-      return { action, videos: vids };
+      return { action, videos: targetVideos };
     }
-    el = el.parentElement;
+    element = element.parentElement;
   }
   return null;
 }
 
-function resolveActionFromEvent(e, INSTANCES) {
-  const path = typeof e.composedPath === "function" ? e.composedPath() : null;
-  if (Array.isArray(path)) {
-    for (let i = 0; i < path.length; i++) {
-      const n = path[i];
-      if (n && n.nodeType === 1 && n.hasAttribute?.(A.ACTION)) {
-        const res = resolveActionTarget(n, INSTANCES);
-        if (res) return res;
+function resolveActionFromEvent(event, INSTANCES) {
+  const eventPath = typeof event.composedPath === "function" ? event.composedPath() : null;
+  if (Array.isArray(eventPath)) {
+    for (let i = 0; i < eventPath.length; i++) {
+      const node = eventPath[i];
+      if (node && node.nodeType === 1 && node.hasAttribute?.(A.ACTION)) {
+        const result = resolveActionTarget(node, INSTANCES);
+        if (result) return result;
       }
     }
   }
-  return resolveActionTarget(e.target, INSTANCES);
+  return resolveActionTarget(event.target, INSTANCES);
 }
 
 // Setup delegated control listeners

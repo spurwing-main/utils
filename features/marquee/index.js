@@ -14,9 +14,6 @@ const TRACKED_ELEMENTS = new Set();
 const ATTR_MARQUEE = "data-marquee";
 const ATTR_SPEED = "data-marquee-speed";
 
-// Performance: reusable time function (modern browsers only)
-const getTime = () => performance.now();
-
 /**
  * MarqueeInstance manages the animation lifecycle for a single container
  */
@@ -34,6 +31,8 @@ class MarqueeInstance {
 
     this._checkMotionPreference();
     this._setupResizeObserver();
+    this._setupFontLoadObserver();
+    this._setupImageLoadObserver();
   }
 
   _checkMotionPreference() {
@@ -81,6 +80,61 @@ class MarqueeInstance {
       this.resizeObserver.observe(this.container);
     } catch (e) {
       DBG?.warn("ResizeObserver setup failed", e);
+    }
+  }
+
+  _setupFontLoadObserver() {
+    // Handle font loading changes that affect content dimensions
+    if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
+      document.fonts.ready
+        .then(() => {
+          if (this.animationId) {
+            DBG?.info("fonts loaded, remeasuring content");
+            this._measureContent();
+            this._createClones();
+          }
+        })
+        .catch((e) => {
+          DBG?.warn("font loading check failed", e);
+        });
+    }
+  }
+
+  _setupImageLoadObserver() {
+    // Handle image loading that affects content dimensions
+    if (!this.container) return;
+
+    try {
+      const images = this.container.querySelectorAll("img");
+      let pendingImages = 0;
+
+      const handleImageLoad = () => {
+        pendingImages--;
+        if (pendingImages === 0 && this.animationId) {
+          DBG?.info("images loaded, remeasuring content");
+          this._measureContent();
+          this._createClones();
+        }
+      };
+
+      for (const img of images) {
+        // Check if image is already loaded
+        if (img.complete && img.naturalHeight !== 0) {
+          continue;
+        }
+
+        pendingImages++;
+        const onLoad = () => {
+          handleImageLoad();
+          img.removeEventListener("load", onLoad);
+          img.removeEventListener("error", onLoad);
+        };
+
+        img.addEventListener("load", onLoad, { once: true, passive: true });
+        img.addEventListener("error", onLoad, { once: true, passive: true });
+      }
+    } catch (e) {
+      DBG?.warn("image load observer setup failed", e);
     }
   }
 
@@ -198,10 +252,15 @@ class MarqueeInstance {
       return;
     }
 
-    let lastTime = getTime();
     const speedPerMs = speed / 16.67; // Pre-calculate for performance
+    let lastTime = null; // Initialize on first frame to avoid timing mismatch
 
     const tick = (currentTime) => {
+      // Initialize lastTime on first frame to sync with requestAnimationFrame timing
+      if (lastTime === null) {
+        lastTime = currentTime;
+      }
+
       const delta = currentTime - lastTime;
       lastTime = currentTime;
 
