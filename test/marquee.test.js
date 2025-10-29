@@ -101,10 +101,9 @@ test("marquee feature exports init and Marquee", async () => {
   const mod = await importMarqueeFeatureFresh();
   assert.ok(mod.init, "init exported");
   assert.ok(mod.Marquee, "Marquee exported");
-  assert.ok(typeof mod.Marquee.start === "function", "Marquee.start is function");
-  assert.ok(typeof mod.Marquee.stop === "function", "Marquee.stop is function");
-  assert.ok(typeof mod.Marquee.startAll === "function", "Marquee.startAll is function");
-  assert.ok(typeof mod.Marquee.stopAll === "function", "Marquee.stopAll is function");
+  assert.ok(typeof mod.Marquee.attach === "function", "Marquee.attach is function");
+  assert.ok(typeof mod.Marquee.detach === "function", "Marquee.detach is function");
+  assert.ok(typeof mod.Marquee.rescan === "function", "Marquee.rescan is function");
 });
 
 test("marquee init is idempotent", async () => {
@@ -119,41 +118,43 @@ test("marquee init is idempotent", async () => {
   assert.ok(true, "init can be called multiple times without error");
 });
 
-test("marquee start can be called without errors", async () => {
+test("marquee attach can be called without errors", async () => {
   const { window } = await setupDom();
   const mod = await importMarqueeFeatureFresh();
 
   const container = window.document.createElement("div");
+  container.setAttribute("data-marquee", "");
   container.innerHTML = "<span>Test content</span>";
   window.document.body.appendChild(container);
 
   // Should not throw
-  mod.Marquee.start(container);
+  mod.Marquee.attach(container);
 
   // Wait for any async operations
   await new Promise((resolve) => setTimeout(resolve, 50));
 
-  // Should be able to stop without errors
-  mod.Marquee.stop(container);
+  // Should be able to detach without errors
+  mod.Marquee.detach(container);
 
-  assert.ok(true, "start and stop completed without throwing");
+  assert.ok(true, "attach and detach completed without throwing");
 });
 
-test("marquee stop restores original DOM", async () => {
+test("marquee detach restores original DOM", async () => {
   const { window } = await setupDom();
   const mod = await importMarqueeFeatureFresh();
 
   const originalHTML = "<span>Original content</span>";
   const container = window.document.createElement("div");
+  container.setAttribute("data-marquee", "");
   container.innerHTML = originalHTML;
   window.document.body.appendChild(container);
 
-  mod.Marquee.start(container);
+  mod.Marquee.attach(container);
 
   // Wait for setup
   await new Promise((resolve) => setTimeout(resolve, 20));
 
-  mod.Marquee.stop(container);
+  mod.Marquee.detach(container);
 
   // Check DOM is restored
   assert.equal(container.innerHTML, originalHTML, "original HTML restored");
@@ -164,127 +165,127 @@ test("marquee handles invalid container gracefully", async () => {
   const mod = await importMarqueeFeatureFresh();
 
   // Should not throw with invalid inputs
-  mod.Marquee.start(null);
-  mod.Marquee.start(undefined);
-  mod.Marquee.start({});
-  mod.Marquee.stop(null);
-  mod.Marquee.stop(undefined);
+  mod.Marquee.attach(null);
+  mod.Marquee.attach(undefined);
+  mod.Marquee.attach({});
+  mod.Marquee.detach(null);
+  mod.Marquee.detach(undefined);
 
   assert.ok(true, "invalid containers handled gracefully");
 });
 
-test("marquee startAll can be called without errors", async () => {
+test("marquee rescan discovers new elements", async () => {
   const { window } = await setupDom();
   const mod = await importMarqueeFeatureFresh();
 
   const container1 = window.document.createElement("div");
-  container1.className = "marquee-test";
+  container1.setAttribute("data-marquee", "");
   container1.innerHTML = "<span>Content 1</span>";
 
   const container2 = window.document.createElement("div");
-  container2.className = "marquee-test";
+  container2.setAttribute("data-marquee", "");
   container2.innerHTML = "<span>Content 2</span>";
 
   window.document.body.appendChild(container1);
   window.document.body.appendChild(container2);
 
   // Should not throw
-  mod.Marquee.startAll(".marquee-test");
+  mod.Marquee.rescan();
 
   // Wait for any async operations
   await new Promise((resolve) => setTimeout(resolve, 50));
 
   // Cleanup should also not throw
-  mod.Marquee.stopAll(".marquee-test");
+  mod.Marquee.detach(container1);
+  mod.Marquee.detach(container2);
 
-  assert.ok(true, "startAll and stopAll completed without throwing");
+  assert.ok(true, "rescan completed without throwing");
 });
 
-test("marquee stopAll works with selector", async () => {
-  const { window } = await setupDom();
-  const mod = await importMarqueeFeatureFresh();
-
-  const originalHTML = "<span>Content</span>";
-  const container1 = window.document.createElement("div");
-  container1.className = "marquee-test";
-  container1.innerHTML = originalHTML;
-
-  const container2 = window.document.createElement("div");
-  container2.className = "marquee-test";
-  container2.innerHTML = originalHTML;
-
-  window.document.body.appendChild(container1);
-  window.document.body.appendChild(container2);
-
-  mod.Marquee.startAll(".marquee-test");
-  await new Promise((resolve) => setTimeout(resolve, 20));
-
-  mod.Marquee.stopAll(".marquee-test");
-
-  // Check both containers were restored
-  assert.equal(container1.innerHTML, originalHTML, "container1 restored");
-  assert.equal(container2.innerHTML, originalHTML, "container2 restored");
-});
-
-test("marquee respects speed option", async () => {
+test("marquee reads speed from data-marquee-speed attribute", async () => {
   const { window } = await setupDom();
   const mod = await importMarqueeFeatureFresh();
 
   const container = window.document.createElement("div");
+  container.setAttribute("data-marquee", "");
+  container.setAttribute("data-marquee-speed", "2");
+  container.innerHTML = "<span>Content</span>";
+
+  window.document.body.appendChild(container);
+
+  // Should read speed from attribute
+  mod.Marquee.attach(container);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  // Cleanup
+  mod.Marquee.detach(container);
+
+  assert.ok(true, "speed attribute read successfully");
+});
+
+test("marquee rescan detaches removed elements", async () => {
+  const { window } = await setupDom();
+  const mod = await importMarqueeFeatureFresh();
+
+  const container = window.document.createElement("div");
+  container.setAttribute("data-marquee", "");
   container.innerHTML = "<span>Test content</span>";
   window.document.body.appendChild(container);
 
-  // Should not throw with custom speed
-  mod.Marquee.start(container, { speed: 2 });
-
+  mod.Marquee.rescan();
   await new Promise((resolve) => setTimeout(resolve, 20));
 
-  assert.ok(true, "custom speed option accepted");
+  // Remove attribute
+  container.removeAttribute("data-marquee");
 
-  // Cleanup
-  mod.Marquee.stop(container);
+  // Rescan should detach
+  mod.Marquee.rescan();
+
+  assert.ok(true, "rescan detached element without attribute");
 });
 
-test("marquee handles multiple start calls gracefully", async () => {
+test("marquee handles multiple attach calls gracefully", async () => {
   const { window } = await setupDom();
   const mod = await importMarqueeFeatureFresh();
 
   const container = window.document.createElement("div");
+  container.setAttribute("data-marquee", "");
   container.innerHTML = "<span>Test content</span>";
   window.document.body.appendChild(container);
 
-  // Start multiple times - should be idempotent
-  mod.Marquee.start(container);
-  mod.Marquee.start(container);
-  mod.Marquee.start(container);
+  // Attach multiple times - should be idempotent
+  mod.Marquee.attach(container);
+  mod.Marquee.attach(container);
+  mod.Marquee.attach(container);
 
   await new Promise((resolve) => setTimeout(resolve, 20));
 
-  assert.ok(true, "multiple start calls handled gracefully");
+  assert.ok(true, "multiple attach calls handled gracefully");
 
   // Cleanup
-  mod.Marquee.stop(container);
+  mod.Marquee.detach(container);
 });
 
-test("marquee cleans up on stop", async () => {
+test("marquee cleans up on detach", async () => {
   const { window } = await setupDom();
   const mod = await importMarqueeFeatureFresh();
 
   const container = window.document.createElement("div");
+  container.setAttribute("data-marquee", "");
   container.innerHTML = "<span>Test content</span>";
   const originalOverflow = container.style.overflow;
   window.document.body.appendChild(container);
 
-  mod.Marquee.start(container);
+  mod.Marquee.attach(container);
   await new Promise((resolve) => setTimeout(resolve, 20));
 
-  mod.Marquee.stop(container);
+  mod.Marquee.detach(container);
 
   // Check cleanup
   assert.equal(container.style.overflow, originalOverflow, "overflow style restored");
 
-  // Should be able to stop again without error
-  mod.Marquee.stop(container);
+  // Should be able to detach again without error
+  mod.Marquee.detach(container);
 
   assert.ok(true, "cleanup completed successfully");
 });

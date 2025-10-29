@@ -8,6 +8,10 @@ let _inited = false;
 // WeakMap to track active marquee instances per container
 const ACTIVE_INSTANCES = new WeakMap();
 
+// Attribute name for marquee containers
+const ATTR_MARQUEE = "data-marquee";
+const ATTR_SPEED = "data-marquee-speed";
+
 /**
  * MarqueeInstance manages the animation lifecycle for a single container
  */
@@ -352,25 +356,29 @@ function isValidContainer(container) {
 }
 
 /**
- * Helper: Parse selector into array of elements
- * @param {string|HTMLElement|NodeList} selector - Selector to parse
- * @returns {Array<HTMLElement>|null} Array of elements or null if invalid
+ * Helper: Get speed from element attribute or default
+ * @param {Element} element - Element to read speed from
+ * @returns {number} Speed in pixels per frame at 60fps
  */
-function parseSelector(selector) {
-  if (typeof selector === "string") {
-    return Array.from(document.querySelectorAll(selector));
+function getSpeed(element) {
+  const speedAttr = element.getAttribute(ATTR_SPEED);
+  if (speedAttr) {
+    const speed = Number.parseFloat(speedAttr);
+    if (!Number.isNaN(speed) && speed > 0) {
+      return speed;
+    }
   }
-  if (typeof HTMLElement !== "undefined" && selector instanceof HTMLElement) {
-    return [selector];
-  }
-  if (selector && selector.nodeType === 1) {
-    // POLICY: Fallback check for Element nodes when HTMLElement is not available
-    return [selector];
-  }
-  if (selector && typeof selector.forEach === "function") {
-    return Array.from(selector);
-  }
-  return null;
+  return 1; // Default speed: 1 pixel per frame at 60fps
+}
+
+/**
+ * Helper: Find all marquee elements in document
+ * @param {Document|Element} root - Root element to search from
+ * @returns {Array<Element>} Array of marquee elements
+ */
+function findMarqueeElements(root = document) {
+  if (!root || !root.querySelectorAll) return [];
+  return Array.from(root.querySelectorAll(`[${ATTR_MARQUEE}]`));
 }
 
 /**
@@ -378,12 +386,11 @@ function parseSelector(selector) {
  */
 export const Marquee = {
   /**
-   * Start marquee animation on a container element
+   * Attach marquee to a specific element
    * @param {HTMLElement} container - The container element to animate
-   * @param {Object} options - Animation options
-   * @param {number} options.speed - Animation speed (pixels per frame at 60fps)
+   * @internal Use rescan() to discover elements via attributes
    */
-  start(container, options = {}) {
+  attach(container) {
     if (!isValidContainer(container)) {
       try {
         DBG?.warn("invalid container element");
@@ -392,25 +399,37 @@ export const Marquee = {
     }
 
     try {
-      let instance = ACTIVE_INSTANCES.get(container);
-      if (!instance) {
-        instance = new MarqueeInstance(container);
-        ACTIVE_INSTANCES.set(container, instance);
+      // Check if already attached
+      if (ACTIVE_INSTANCES.has(container)) {
+        try {
+          DBG?.info("marquee already attached to element");
+        } catch (_) {}
+        return;
       }
-      instance.start(options);
+
+      const instance = new MarqueeInstance(container);
+      ACTIVE_INSTANCES.set(container, instance);
+
+      const speed = getSpeed(container);
+      instance.start({ speed });
+
+      try {
+        DBG?.info("marquee attached", { speed });
+      } catch (_) {}
     } catch (e) {
       try {
-        DBG?.error("Marquee.start failed", e);
+        DBG?.error("Marquee.attach failed", e);
       } catch (_) {}
       // POLICY: Return gracefully on error
     }
   },
 
   /**
-   * Stop marquee animation on a container element
+   * Detach marquee from a specific element
    * @param {HTMLElement} container - The container element to stop
+   * @internal Use rescan() to automatically manage elements
    */
-  stop(container) {
+  detach(container) {
     if (!isValidContainer(container)) {
       try {
         DBG?.warn("invalid container element");
@@ -423,61 +442,59 @@ export const Marquee = {
       if (instance) {
         instance.stop();
         ACTIVE_INSTANCES.delete(container);
+        try {
+          DBG?.info("marquee detached");
+        } catch (_) {}
       }
     } catch (e) {
       try {
-        DBG?.error("Marquee.stop failed", e);
+        DBG?.error("Marquee.detach failed", e);
       } catch (_) {}
       // POLICY: Return gracefully on error
     }
   },
 
   /**
-   * Start marquee on all elements matching selector
-   * @param {string|HTMLElement|NodeList} selector - CSS selector, element, or NodeList
-   * @param {Object} options - Animation options
+   * Rescan document for marquee elements and sync state
+   * - Attaches new elements with data-marquee attribute
+   * - Detaches elements that no longer have data-marquee attribute
+   * @param {Document|Element} root - Optional root element to scan from (defaults to document)
    */
-  startAll(selector, options = {}) {
+  rescan(root = document) {
     try {
-      const elements = parseSelector(selector);
-      if (!elements) {
-        try {
-          DBG?.warn("invalid selector type");
-        } catch (_) {}
-        return;
+      // Find all current marquee elements
+      const currentElements = findMarqueeElements(root);
+
+      // Detach instances that no longer have the attribute
+      const toDetach = [];
+      for (const [element] of ACTIVE_INSTANCES) {
+        // Check if element still has the attribute
+        if (!element.hasAttribute(ATTR_MARQUEE)) {
+          toDetach.push(element);
+        }
       }
 
-      for (const el of elements) {
-        this.start(el, options);
+      for (const element of toDetach) {
+        this.detach(element);
       }
-    } catch (e) {
+
+      // Attach new elements
+      for (const element of currentElements) {
+        if (!ACTIVE_INSTANCES.has(element)) {
+          this.attach(element);
+        }
+      }
+
       try {
-        DBG?.error("Marquee.startAll failed", e);
+        DBG?.info("rescan completed", {
+          found: currentElements.length,
+          attached: currentElements.filter((el) => ACTIVE_INSTANCES.has(el)).length,
+          detached: toDetach.length,
+        });
       } catch (_) {}
-      // POLICY: Return gracefully on error
-    }
-  },
-
-  /**
-   * Stop marquee on all elements matching selector
-   * @param {string|HTMLElement|NodeList} selector - CSS selector, element, or NodeList
-   */
-  stopAll(selector) {
-    try {
-      const elements = parseSelector(selector);
-      if (!elements) {
-        try {
-          DBG?.warn("invalid selector type");
-        } catch (_) {}
-        return;
-      }
-
-      for (const el of elements) {
-        this.stop(el);
-      }
     } catch (e) {
       try {
-        DBG?.error("Marquee.stopAll failed", e);
+        DBG?.error("Marquee.rescan failed", e);
       } catch (_) {}
       // POLICY: Return gracefully on error
     }
@@ -486,16 +503,21 @@ export const Marquee = {
 
 /**
  * Idempotent initialization function
- * No automatic behavior - consuming code decides when to start/stop
+ * Performs initial scan for marquee elements
  */
 export function init() {
   if (_inited) return;
   _inited = true;
 
   try {
-    DBG?.info("marquee feature initialized (no auto-start)");
-  } catch (_) {}
-  // POLICY: No side effects in init - consuming code controls when to run
+    DBG?.info("marquee feature initialized");
+    // Perform initial rescan to attach to any existing elements
+    Marquee.rescan();
+  } catch (e) {
+    try {
+      DBG?.error("marquee init failed", e);
+    } catch (_) {}
+  }
 }
 
 export default { init, Marquee };
