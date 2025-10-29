@@ -14,8 +14,9 @@ The marquee feature is a tiny, standalone module whose only job is to make marke
 - **Seamless Looping**: Content is cloned and animated with transform for smooth, jump-free scrolling
 - **Motion Preferences**: Honors `prefers-reduced-motion` to avoid animations for users who don't want them
 - **Adaptive**: Uses ResizeObserver to adjust when container sizes change
-- **Clean Cleanup**: Restores DOM to original state and releases all resources when detached
+- **Clean Cleanup**: Restores the exact DOM nodes (including event listeners) and releases all resources when detached
 - **No Dependencies**: No globals, no framework ties, no styling opinions
+- **Accessible by Design**: Cloned nodes are hidden from assistive tech, stripped of duplicate IDs, and prevented from stealing focus
 
 ## Usage
 
@@ -144,6 +145,7 @@ All marquees with the same speed value will scroll at the same visual speed, reg
    - Saves the original DOM state
    - Wraps content in a positioning container
    - Clones the content to create a seamless loop
+   - Sanitizes clones (removes duplicate IDs, hides from assistive tech, disables focus)
    - Measures content width for proper looping
 
 2. **Animation**: Uses `requestAnimationFrame` to:
@@ -158,7 +160,7 @@ All marquees with the same speed value will scroll at the same visual speed, reg
 
 4. **Cleanup**: When detached:
    - Cancels animation frame
-   - Restores original HTML
+   - Restores original nodes (so existing event listeners remain intact)
    - Restores original styles
    - Disconnects observers
    - Releases all resources

@@ -160,6 +160,31 @@ test("marquee detach restores original DOM", async () => {
   assert.equal(container.innerHTML, originalHTML, "original HTML restored");
 });
 
+test("marquee detach preserves original event listeners", async () => {
+  const { window } = await setupDom();
+  const mod = await importMarqueeFeatureFresh();
+
+  const container = window.document.createElement("div");
+  container.setAttribute("data-marquee", "");
+  const button = window.document.createElement("button");
+  button.id = "cta";
+  let clicks = 0;
+  button.addEventListener("click", () => {
+    clicks += 1;
+  });
+
+  container.appendChild(button);
+  window.document.body.appendChild(container);
+
+  mod.Marquee.attach(container);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  mod.Marquee.detach(container);
+
+  button.dispatchEvent(new window.Event("click", { bubbles: true }));
+
+  assert.equal(clicks, 1, "original event listener remains attached after detach");
+});
+
 test("marquee handles invalid container gracefully", async () => {
   await setupDom();
   const mod = await importMarqueeFeatureFresh();
@@ -288,4 +313,41 @@ test("marquee cleans up on detach", async () => {
   mod.Marquee.detach(container);
 
   assert.ok(true, "cleanup completed successfully");
+});
+
+test("marquee clones are hidden from assistive tech and not focusable", async () => {
+  const { window } = await setupDom();
+  const mod = await importMarqueeFeatureFresh();
+
+  const container = window.document.createElement("div");
+  container.setAttribute("data-marquee", "");
+  container.setAttribute("data-marquee-speed", "1.5");
+  const link = window.document.createElement("a");
+  link.href = "#";
+  link.id = "primary-link";
+  link.textContent = "Focusable";
+  container.appendChild(link);
+  window.document.body.appendChild(container);
+
+  mod.Marquee.attach(container);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const clones = container.querySelectorAll("[data-marquee-clone]");
+  assert.ok(clones.length > 0, "clones created for seamless marquee");
+
+  for (const clone of clones) {
+    assert.equal(clone.getAttribute("aria-hidden"), "true", "clone is hidden from assistive tech");
+    assert.ok(!clone.id, "clone ids removed to avoid duplicates");
+    assert.equal(clone.getAttribute("tabindex"), "-1", "clone root not focusable");
+  }
+
+  // Ensure nested focusable elements are also disabled
+  const nestedFocusables = container.querySelectorAll("[data-marquee-clone] " +
+    "a[href], button, input, select, textarea, [tabindex]");
+  for (const el of nestedFocusables) {
+    assert.equal(el.getAttribute("aria-hidden"), "true", "nested clone descendant hidden");
+    assert.equal(el.getAttribute("tabindex"), "-1", "nested clone descendant unfocusable");
+  }
+
+  mod.Marquee.detach(container);
 });

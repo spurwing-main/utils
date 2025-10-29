@@ -23,13 +23,13 @@ const getTime = () => performance.now();
 class MarqueeInstance {
   constructor(container) {
     this.container = container;
-    this.originalHTML = null;
     this.wrapper = null;
     this.clones = [];
     this.animationId = null;
     this.offset = 0;
     this.contentWidth = 0;
     this.resizeObserver = null;
+    this.resizeThrottleId = null;
     this.prefersReducedMotion = false;
 
     this._checkMotionPreference();
@@ -66,14 +66,16 @@ class MarqueeInstance {
 
     try {
       // Throttle resize updates for better performance
-      let resizeTimeout;
       this.resizeObserver = new ResizeObserver(() => {
         if (!this.animationId) return;
 
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
+        if (this.resizeThrottleId !== null) {
+          clearTimeout(this.resizeThrottleId);
+        }
+        this.resizeThrottleId = setTimeout(() => {
           this._measureContent();
           this._createClones();
+          this.resizeThrottleId = null;
         }, 150);
       });
       this.resizeObserver.observe(this.container);
@@ -85,7 +87,6 @@ class MarqueeInstance {
   _prepareContainer() {
     try {
       // Save original state
-      this.originalHTML = this.container.innerHTML;
       this.originalOverflow = this.container.style.overflow;
       this.originalPosition = this.container.style.position;
 
@@ -170,6 +171,10 @@ class MarqueeInstance {
           const clone = child.cloneNode(true);
           clone.setAttribute("data-marquee-clone", "true");
           clone.setAttribute("aria-hidden", "true");
+          if (clone.id) {
+            clone.removeAttribute("id");
+          }
+          disableCloneInteractivity(clone);
           fragment.appendChild(clone);
           this.clones.push(clone);
         }
@@ -209,7 +214,7 @@ class MarqueeInstance {
       }
 
       // Update position - avoid string interpolation in hot path
-      this.wrapper.style.transform = "translateX(-" + this.offset + "px)";
+      this.wrapper.style.transform = `translateX(-${this.offset}px)`;
 
       // Continue animation
       this.animationId = requestAnimationFrame(tick);
@@ -241,10 +246,22 @@ class MarqueeInstance {
       this.animationId = null;
     }
 
-    // Restore original DOM
-    if (this.originalHTML !== null) {
-      this.container.innerHTML = this.originalHTML;
-      this.originalHTML = null;
+    if (this.resizeThrottleId !== null) {
+      clearTimeout(this.resizeThrottleId);
+      this.resizeThrottleId = null;
+    }
+
+    // Restore original DOM structure without losing event listeners
+    if (this.wrapper) {
+      while (this.wrapper.firstChild) {
+        const node = this.wrapper.firstChild;
+        if (node.nodeType === 1 && node.hasAttribute("data-marquee-clone")) {
+          node.remove();
+        } else {
+          this.container.appendChild(node);
+        }
+      }
+      this.wrapper.remove();
     }
 
     // Restore container styles
@@ -276,6 +293,31 @@ class MarqueeInstance {
     this.offset = 0;
 
     DBG?.info("marquee stopped and cleaned up");
+  }
+}
+
+const FOCUSABLE_SELECTOR =
+  "a[href],area[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
+
+function disableCloneInteractivity(node) {
+  if (!node || node.nodeType !== 1) return;
+  const element = node;
+
+  if ("inert" in element) {
+    try {
+      element.inert = true;
+    } catch (e) {
+      DBG?.warn("failed to set inert on clone", e);
+    }
+  }
+
+  if (element.matches?.(FOCUSABLE_SELECTOR)) {
+    element.setAttribute("tabindex", "-1");
+  }
+
+  for (const focusable of element.querySelectorAll?.(FOCUSABLE_SELECTOR) ?? []) {
+    focusable.setAttribute("tabindex", "-1");
+    focusable.setAttribute("aria-hidden", "true");
   }
 }
 
