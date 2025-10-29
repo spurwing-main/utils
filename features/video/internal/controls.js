@@ -42,13 +42,9 @@ function resolveActionTarget(startElement, INSTANCES) {
       const selector = element.getAttribute(A.TARGET);
       let targetVideos = [];
       if (selector) {
-        try {
-          targetVideos = Array.from(doc.querySelectorAll(selector)).filter(
-            (node) => isVideo(node) && INSTANCES.has(node),
-          );
-        } catch {
-          /* POLICY-EXCEPTION: invalid selector; fallback to nearest video */
-        }
+        targetVideos = Array.from(doc.querySelectorAll(selector)).filter(
+          (node) => isVideo(node) && INSTANCES.has(node),
+        );
       }
       if (!targetVideos.length) {
         // nearest or descendant managed video (instance exists)
