@@ -76,7 +76,7 @@ async function setupDom() {
       const cb = frames.get(id);
       if (cb) {
         frames.delete(id);
-        cb(performance.now());
+        cb(window.performance.now());
       }
     }, 0);
     return id;
@@ -85,10 +85,11 @@ async function setupDom() {
     frames.delete(id);
   };
 
-  if (!window.performance) {
-    window.performance = { now: () => Date.now() };
-  }
-  if (typeof window.performance.now !== "function") {
+  // Mock performance.now if not available
+  if (!window.performance || typeof window.performance.now !== "function") {
+    if (!window.performance) {
+      window.performance = {};
+    }
     window.performance.now = () => Date.now();
   }
 

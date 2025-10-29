@@ -1,6 +1,7 @@
 /* Marquee Feature – standalone smooth scrolling animation module */
 
-const DBG = window.__UTILS_DEBUG__?.createLogger?.("marquee");
+const DBG =
+  typeof window !== "undefined" ? window.__UTILS_DEBUG__?.createLogger?.("marquee") : null;
 
 let _inited = false;
 
@@ -204,7 +205,13 @@ class MarqueeInstance {
       return;
     }
 
-    let lastTime = performance.now();
+    // POLICY: Ensure performance.now is available, fallback to Date.now
+    const now =
+      typeof performance !== "undefined" && typeof performance.now === "function"
+        ? () => performance.now()
+        : () => Date.now();
+
+    let lastTime = now();
 
     const tick = (currentTime) => {
       try {
@@ -336,6 +343,37 @@ class MarqueeInstance {
 }
 
 /**
+ * Helper: Validate container element
+ * @param {any} container - Element to validate
+ * @returns {boolean} True if valid element node
+ */
+function isValidContainer(container) {
+  return container && container.nodeType && container.nodeType === 1;
+}
+
+/**
+ * Helper: Parse selector into array of elements
+ * @param {string|HTMLElement|NodeList} selector - Selector to parse
+ * @returns {Array<HTMLElement>|null} Array of elements or null if invalid
+ */
+function parseSelector(selector) {
+  if (typeof selector === "string") {
+    return Array.from(document.querySelectorAll(selector));
+  }
+  if (typeof HTMLElement !== "undefined" && selector instanceof HTMLElement) {
+    return [selector];
+  }
+  if (selector && selector.nodeType === 1) {
+    // POLICY: Fallback check for Element nodes when HTMLElement is not available
+    return [selector];
+  }
+  if (selector && typeof selector.forEach === "function") {
+    return Array.from(selector);
+  }
+  return null;
+}
+
+/**
  * Public API for marquee feature
  */
 export const Marquee = {
@@ -346,8 +384,7 @@ export const Marquee = {
    * @param {number} options.speed - Animation speed (pixels per frame at 60fps)
    */
   start(container, options = {}) {
-    // POLICY: Check if container is a valid element node
-    if (!container || !container.nodeType || container.nodeType !== 1) {
+    if (!isValidContainer(container)) {
       try {
         DBG?.warn("invalid container element");
       } catch (_) {}
@@ -374,8 +411,7 @@ export const Marquee = {
    * @param {HTMLElement} container - The container element to stop
    */
   stop(container) {
-    // POLICY: Check if container is a valid element node
-    if (!container || !container.nodeType || container.nodeType !== 1) {
+    if (!isValidContainer(container)) {
       try {
         DBG?.warn("invalid container element");
       } catch (_) {}
@@ -403,18 +439,8 @@ export const Marquee = {
    */
   startAll(selector, options = {}) {
     try {
-      let elements;
-
-      if (typeof selector === "string") {
-        elements = document.querySelectorAll(selector);
-      } else if (typeof HTMLElement !== "undefined" && selector instanceof HTMLElement) {
-        elements = [selector];
-      } else if (selector && selector.nodeType === 1) {
-        // POLICY: Fallback check for Element nodes when HTMLElement is not available
-        elements = [selector];
-      } else if (selector && typeof selector.forEach === "function") {
-        elements = selector;
-      } else {
+      const elements = parseSelector(selector);
+      if (!elements) {
         try {
           DBG?.warn("invalid selector type");
         } catch (_) {}
@@ -438,18 +464,8 @@ export const Marquee = {
    */
   stopAll(selector) {
     try {
-      let elements;
-
-      if (typeof selector === "string") {
-        elements = document.querySelectorAll(selector);
-      } else if (typeof HTMLElement !== "undefined" && selector instanceof HTMLElement) {
-        elements = [selector];
-      } else if (selector && selector.nodeType === 1) {
-        // POLICY: Fallback check for Element nodes when HTMLElement is not available
-        elements = [selector];
-      } else if (selector && typeof selector.forEach === "function") {
-        elements = selector;
-      } else {
+      const elements = parseSelector(selector);
+      if (!elements) {
         try {
           DBG?.warn("invalid selector type");
         } catch (_) {}
