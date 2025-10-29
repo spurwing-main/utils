@@ -5,7 +5,7 @@ Extracted from features/video/index.js for better modularity
 
 import { isVideo, getDOC } from "./internal-utils.js";
 
-import { A, logError } from "./constants.js";
+import { attr, logError } from "./constants.js";
 
 function warn(...args) {
   logError("controls", args);
@@ -38,13 +38,13 @@ function findActionTarget(startElement, INSTANCES) {
   let element = startElement;
   
   while (element && element !== doc?.documentElement) {
-    if (!element?.hasAttribute?.(A.ACTION)) {
+    if (!element?.hasAttribute?.(attr.action)) {
       element = element.parentElement;
       continue;
     }
     
-    const action = element.getAttribute(A.ACTION);
-    const selector = element.getAttribute(A.TARGET);
+    const action = element.getAttribute(attr.action);
+    const selector = element.getAttribute(attr.target);
     
     // Try selector first
     if (selector) {
@@ -82,7 +82,7 @@ function findActionFromEvent(event, INSTANCES) {
   const eventPath = typeof event.composedPath === "function" ? event.composedPath() : null;
   if (Array.isArray(eventPath)) {
     for (const node of eventPath) {
-      if (node?.nodeType === 1 && node.hasAttribute?.(A.ACTION)) {
+      if (node?.nodeType === 1 && node.hasAttribute?.(attr.action)) {
         const result = findActionTarget(node, INSTANCES);
         if (result) return result;
       }

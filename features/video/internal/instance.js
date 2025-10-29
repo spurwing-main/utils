@@ -12,7 +12,7 @@ import {
   getWIN as getWin,
   getDOC as getDoc,
 } from "./internal-utils.js";
-import { A, logError } from "./constants.js";
+import { attr, logError } from "./constants.js";
 const PRIORITY_PLAY_MS = 120; // pointer-on priority window to override hidden-pause
 
 function emit(el, name, detail) {
@@ -44,7 +44,7 @@ function findFirstVideo(container, INSTANCES) {
   const videos = container.querySelectorAll("video");
   for (let i = 0; i < videos.length; i++) {
     const video = videos[i];
-    if (INSTANCES.has(video) || video.hasAttribute(A.SRC)) return video;
+    if (INSTANCES.has(video) || video.hasAttribute(attr.src)) return video;
   }
   return null;
 }
@@ -110,31 +110,31 @@ export function Instance(video, { INSTANCES, CONTAINER_CLAIMS }) {
 Instance.prototype._readConfig = function () {
   const v = this.v;
   // Stacked tokens
-  const loadTokens = parseTokens(v.getAttribute(A.LOAD_WHEN));
-  const playTokens = parseTokens(v.getAttribute(A.PLAY_WHEN));
-  const pauseTokens = parseTokens(v.getAttribute(A.PAUSE_WHEN));
+  const loadTokens = parseTokens(v.getAttribute(attr.loadWhen));
+  const playTokens = parseTokens(v.getAttribute(attr.playWhen));
+  const pauseTokens = parseTokens(v.getAttribute(attr.pauseWhen));
   // Cache author-provided sources for reliable retries
-  const srcPrimary = v.getAttribute(A.SRC) || null;
-  const srcMobile = v.getAttribute(A.SRC_MOB) || null;
+  const srcPrimary = v.getAttribute(attr.src) || null;
+  const srcMobile = v.getAttribute(attr.srcMob) || null;
   // Normalize threshold & margin
-  const threshold = parseThresholdInput(v.getAttribute(A.THRESHOLD));
-  const margin = parseRootMargin(v.getAttribute(A.MARGIN) || "300px 0px");
+  const threshold = parseThresholdInput(v.getAttribute(attr.threshold));
+  const margin = parseRootMargin(v.getAttribute(attr.margin) || "300px 0px");
   // Pointer scope
-  const parentPointer = v.getAttribute(A.PARENT_POINTER) || null;
+  const parentPointer = v.getAttribute(attr.parentPointer) || null;
   // Preload request (default metadata)
-  const preloadRaw = String(v.getAttribute(A.PRELOAD) || "metadata").toLowerCase();
+  const preloadRaw = String(v.getAttribute(attr.preload) || "metadata").toLowerCase();
   const preload =
     preloadRaw === "auto" || preloadRaw === "metadata" || preloadRaw === "none"
       ? preloadRaw
       : "metadata";
   // Restart policies
-  const restartTokens = parseTokens(v.getAttribute(A.RESTART_WHEN));
+  const restartTokens = parseTokens(v.getAttribute(attr.restartWhen));
   const restartWhen = {
     finished: restartTokens.includes("finished"),
     onPointer: restartTokens.includes("pointer-on"),
     onVisible: restartTokens.includes("scroll") || restartTokens.includes("visible"),
   };
-  const muted = v.hasAttribute(A.MUTED);
+  const muted = v.hasAttribute(attr.muted);
 
   return {
     load: {
@@ -340,12 +340,12 @@ Instance.prototype._applySrc = function (url) {
   this.chosenSrc = url;
   // Remove data source attributes to lock selection (do not remove trigger config)
   try {
-    v.removeAttribute(A.SRC);
+    v.removeAttribute(attr.src);
   } catch (e) {
     logError("remove data-video-src failed", e);
   }
   try {
-    v.removeAttribute(A.SRC_MOB);
+    v.removeAttribute(attr.srcMob);
   } catch (e) {
     logError("remove data-video-mob-src failed", e);
   }

@@ -5,7 +5,7 @@ import { Instance } from "./internal/instance.js";
 import { setupMutationObserver } from "./internal/observers.js";
 import { setupControlListeners } from "./internal/controls.js";
 
-import { A } from "./internal/constants.js";
+import { attr } from "./internal/constants.js";
 
 // Registry of instances by video
 const INSTANCES = new WeakMap();
@@ -15,7 +15,7 @@ const CONTAINER_CLAIMS = new WeakMap();
 // Public API
 export const Video = {
   attach(el) {
-    if (!isVideo(el) || !el.hasAttribute(A.SRC)) return null;
+    if (!isVideo(el) || !el.hasAttribute(attr.src)) return null;
     const prev = INSTANCES.get(el);
     if (prev) {
       prev.destroy();
@@ -41,7 +41,7 @@ export const Video = {
   },
   ensureLoaded(el) {
     if (!INSTANCES.has(el)) {
-      if (!el.hasAttribute(A.SRC)) {
+      if (!el.hasAttribute(attr.src)) {
         // emit error for missing src
         try {
           el.dispatchEvent(
@@ -78,7 +78,7 @@ export const Video = {
   attachAll(root) {
     const ctx = root || getDOC();
     if (!ctx) return [];
-    const nodes = ctx.querySelectorAll?.(`video[${A.SRC}]`) || [];
+    const nodes = ctx.querySelectorAll?.(`video[${attr.src}]`) || [];
     const out = [];
     for (let i = 0; i < nodes.length; i++) {
       const v = nodes[i];

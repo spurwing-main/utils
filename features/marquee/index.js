@@ -1,18 +1,13 @@
 /* Marquee Feature – standalone smooth scrolling animation module */
 
-const DBG =
-  typeof window !== "undefined" ? window.__UTILS_DEBUG__?.createLogger?.("marquee") : null;
+const debug = typeof window !== "undefined" ? window.__UTILS_DEBUG__?.createLogger?.("marquee") : null;
 
-let _inited = false;
+let inited = false;
+const activeInstances = new WeakMap();
+const trackedElements = new Set();
 
-// WeakMap to track active marquee instances per container
-const ACTIVE_INSTANCES = new WeakMap();
-// Set to track which elements have active instances (for iteration)
-const TRACKED_ELEMENTS = new Set();
-
-// Attribute name for marquee containers
-const ATTR_MARQUEE = "data-marquee";
-const ATTR_SPEED = "data-marquee-speed";
+const attrMarquee = "data-marquee";
+const attrSpeed = "data-marquee-speed";
 
 /**
  * MarqueeInstance manages the animation lifecycle for a single container
@@ -36,219 +31,166 @@ class MarqueeInstance {
   }
 
   _checkMotionPreference() {
-    try {
-      const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-      this.prefersReducedMotion = mediaQuery.matches;
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    this.prefersReducedMotion = mediaQuery.matches;
 
-      // Listen for changes (modern browsers only)
-      const handler = (e) => {
-        this.prefersReducedMotion = e.matches;
-        if (this.prefersReducedMotion && this.animationId) {
-          this.stop();
-        }
-      };
+    const handler = (e) => {
+      this.prefersReducedMotion = e.matches;
+      if (this.prefersReducedMotion && this.animationId) {
+        this.stop();
+      }
+    };
 
-      mediaQuery.addEventListener("change", handler);
-      this.motionMediaQuery = mediaQuery;
-      this.motionHandler = handler;
-    } catch (e) {
-      DBG?.warn("motion preference check failed", e);
-      this.prefersReducedMotion = false;
-    }
+    mediaQuery.addEventListener("change", handler);
+    this.motionMediaQuery = mediaQuery;
+    this.motionHandler = handler;
   }
 
   _setupResizeObserver() {
-    if (typeof ResizeObserver === "undefined") {
-      DBG?.info("ResizeObserver not available, skipping adaptive resize");
-      return;
-    }
+    if (typeof ResizeObserver === "undefined") return;
 
-    try {
-      // Throttle resize updates for better performance
-      this.resizeObserver = new ResizeObserver(() => {
-        if (!this.animationId) return;
+    this.resizeObserver = new ResizeObserver(() => {
+      if (!this.animationId) return;
 
-        if (this.resizeThrottleId !== null) {
-          clearTimeout(this.resizeThrottleId);
-        }
-        this.resizeThrottleId = setTimeout(() => {
-          this._measureContent();
-          this._createClones();
-          this.resizeThrottleId = null;
-        }, 150);
-      });
-      this.resizeObserver.observe(this.container);
-    } catch (e) {
-      DBG?.warn("ResizeObserver setup failed", e);
-    }
+      if (this.resizeThrottleId) clearTimeout(this.resizeThrottleId);
+      
+      this.resizeThrottleId = setTimeout(() => {
+        this._measureContent();
+        this._createClones();
+        this.resizeThrottleId = null;
+      }, 150);
+    });
+    this.resizeObserver.observe(this.container);
   }
 
   _setupFontLoadObserver() {
-    // Handle font loading changes that affect content dimensions
-    if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
-      document.fonts.ready
-        .then(() => {
-          if (this.animationId) {
-            DBG?.info("fonts loaded, remeasuring content");
-            this._measureContent();
-            this._createClones();
-          }
-        })
-        .catch((e) => {
-          DBG?.warn("font loading check failed", e);
-        });
-    }
+    if (!document.fonts?.ready) return;
+
+    document.fonts.ready.then(() => {
+      if (this.animationId) {
+        this._measureContent();
+        this._createClones();
+      }
+    });
   }
 
   _setupImageLoadObserver() {
-    // Handle image loading that affects content dimensions
     if (!this.container) return;
 
-    try {
-      const images = this.container.querySelectorAll("img");
-      let pendingImages = 0;
+    const images = this.container.querySelectorAll("img");
+    let pendingImages = 0;
 
-      const handleImageLoad = () => {
-        pendingImages--;
-        if (pendingImages === 0 && this.animationId) {
-          DBG?.info("images loaded, remeasuring content");
-          this._measureContent();
-          this._createClones();
-        }
+    const handleImageLoad = () => {
+      pendingImages--;
+      if (pendingImages === 0 && this.animationId) {
+        this._measureContent();
+        this._createClones();
+      }
+    };
+
+    for (const img of images) {
+      if (img.complete && img.naturalHeight !== 0) continue;
+
+      pendingImages++;
+      const onLoad = () => {
+        handleImageLoad();
+        img.removeEventListener("load", onLoad);
+        img.removeEventListener("error", onLoad);
       };
 
-      for (const img of images) {
-        // Check if image is already loaded
-        if (img.complete && img.naturalHeight !== 0) {
-          continue;
-        }
-
-        pendingImages++;
-        const onLoad = () => {
-          handleImageLoad();
-          img.removeEventListener("load", onLoad);
-          img.removeEventListener("error", onLoad);
-        };
-
-        img.addEventListener("load", onLoad, { once: true, passive: true });
-        img.addEventListener("error", onLoad, { once: true, passive: true });
-      }
-    } catch (e) {
-      DBG?.warn("image load observer setup failed", e);
+      img.addEventListener("load", onLoad, { once: true, passive: true });
+      img.addEventListener("error", onLoad, { once: true, passive: true });
     }
   }
 
   _prepareContainer() {
-    try {
-      // Save original state
-      this.originalOverflow = this.container.style.overflow;
-      this.originalPosition = this.container.style.position;
+    // Save original state
+    this.originalOverflow = this.container.style.overflow;
+    this.originalPosition = this.container.style.position;
 
-      // Setup container for scrolling
-      this.container.style.overflow = "hidden";
-      if (!this.container.style.position || this.container.style.position === "static") {
-        this.container.style.position = "relative";
-      }
-
-      // Create wrapper for content
-      this.wrapper = document.createElement("div");
-      this.wrapper.style.cssText =
-        "display:inline-flex;white-space:nowrap;position:absolute;left:0;top:0;will-change:transform";
-
-      // Move existing content into wrapper
-      while (this.container.firstChild) {
-        this.wrapper.appendChild(this.container.firstChild);
-      }
-
-      this.container.appendChild(this.wrapper);
-
-      // Measure content width
-      this._measureContent();
-
-      // Clone content for seamless loop
-      this._createClones();
-
-      DBG?.info("container prepared", { contentWidth: this.contentWidth });
-      return true;
-    } catch (e) {
-      DBG?.error("container preparation failed", e);
-      return false;
+    // Setup container
+    this.container.style.overflow = "hidden";
+    if (!this.container.style.position || this.container.style.position === "static") {
+      this.container.style.position = "relative";
     }
+
+    // Create wrapper
+    this.wrapper = document.createElement("div");
+    this.wrapper.style.cssText =
+      "display:inline-flex;white-space:nowrap;position:absolute;left:0;top:0;will-change:transform";
+
+    // Move content into wrapper
+    while (this.container.firstChild) {
+      this.wrapper.appendChild(this.container.firstChild);
+    }
+
+    this.container.appendChild(this.wrapper);
+    this._measureContent();
+    this._createClones();
+
+    return true;
   }
 
   _measureContent() {
-    try {
-      // Filter during iteration for better performance
-      const originalChildren = Array.from(this.wrapper.children).filter(
-        (el) => !el.hasAttribute("data-marquee-clone"),
+    const originalChildren = Array.from(this.wrapper.children).filter(
+      (el) => !el.hasAttribute("data-marquee-clone"),
+    );
+
+    if (originalChildren.length === 0) {
+      this.contentWidth = this.wrapper.scrollWidth || 100;
+    } else {
+      this.contentWidth = originalChildren.reduce(
+        (total, el) => total + (el.offsetWidth || 100),
+        0,
       );
-
-      if (originalChildren.length === 0) {
-        this.contentWidth = this.wrapper.scrollWidth || 100;
-      } else {
-        this.contentWidth = originalChildren.reduce(
-          (total, el) => total + (el.offsetWidth || 100),
-          0,
-        );
-      }
-
-      // Ensure we have a minimum width to avoid division by zero
-      if (this.contentWidth === 0) this.contentWidth = 100;
-    } catch (e) {
-      DBG?.warn("content measurement failed", e);
-      this.contentWidth = 100;
     }
+
+    // Prevent division by zero
+    if (this.contentWidth === 0) this.contentWidth = 100;
   }
 
   _createClones() {
-    try {
-      // Remove existing clones efficiently
-      for (const clone of this.clones) {
-        clone?.remove();
-      }
-      this.clones.length = 0;
-
-      // Get original children (non-clones)
-      const originalChildren = Array.from(this.wrapper.children).filter(
-        (el) => !el.hasAttribute("data-marquee-clone"),
-      );
-
-      // Create enough clones to ensure seamless loop
-      const containerWidth = this.container.offsetWidth || 300;
-      const clonesNeeded = Math.max(1, Math.ceil(containerWidth / this.contentWidth) + 1);
-
-      // Use DocumentFragment for efficient batch DOM operations
-      const fragment = document.createDocumentFragment();
-
-      for (let i = 0; i < clonesNeeded; i++) {
-        for (const child of originalChildren) {
-          const clone = child.cloneNode(true);
-          clone.setAttribute("data-marquee-clone", "true");
-          clone.setAttribute("aria-hidden", "true");
-          if (clone.id) {
-            clone.removeAttribute("id");
-          }
-          disableCloneInteractivity(clone);
-          fragment.appendChild(clone);
-          this.clones.push(clone);
-        }
-      }
-
-      this.wrapper.appendChild(fragment);
-    } catch (e) {
-      DBG?.warn("clone creation failed", e);
+    // Remove existing clones
+    for (const clone of this.clones) {
+      clone?.remove();
     }
+    this.clones.length = 0;
+
+    const originalChildren = Array.from(this.wrapper.children).filter(
+      (el) => !el.hasAttribute("data-marquee-clone"),
+    );
+
+    // Calculate clones needed for seamless loop
+    const containerWidth = this.container.offsetWidth || 300;
+    const clonesNeeded = Math.max(1, Math.ceil(containerWidth / this.contentWidth) + 1);
+
+    const fragment = document.createDocumentFragment();
+
+    for (let i = 0; i < clonesNeeded; i++) {
+      for (const child of originalChildren) {
+        const clone = child.cloneNode(true);
+        clone.setAttribute("data-marquee-clone", "true");
+        clone.setAttribute("aria-hidden", "true");
+        if (clone.id) clone.removeAttribute("id");
+        
+        disableCloneInteractivity(clone);
+        fragment.appendChild(clone);
+        this.clones.push(clone);
+      }
+    }
+
+    this.wrapper.appendChild(fragment);
   }
 
   _animate(speed = 1) {
     if (this.prefersReducedMotion) {
-      DBG?.info("animation skipped due to reduced motion preference");
+      debug?.info("animation skipped due to reduced motion preference");
       return;
     }
 
     // Guard for test environments without requestAnimationFrame
     if (typeof requestAnimationFrame === "undefined") {
-      DBG?.warn("requestAnimationFrame not available");
+      debug?.warn("requestAnimationFrame not available");
       return;
     }
 
@@ -284,18 +226,18 @@ class MarqueeInstance {
 
   start(options = {}) {
     if (this.animationId) {
-      DBG?.info("animation already running");
+      debug?.info("animation already running");
       return;
     }
 
     if (!this.wrapper && !this._prepareContainer()) {
-      DBG?.error("failed to prepare container, aborting start");
+      debug?.error("failed to prepare container, aborting start");
       return;
     }
 
     const speed = options.speed || 1;
     this._animate(speed);
-    DBG?.info("marquee started", { speed });
+    debug?.info("marquee started", { speed });
   }
 
   stop() {
@@ -351,7 +293,7 @@ class MarqueeInstance {
     this.clones.length = 0; // Clear array efficiently
     this.offset = 0;
 
-    DBG?.info("marquee stopped and cleaned up");
+    debug?.info("marquee stopped and cleaned up");
   }
 }
 
@@ -366,7 +308,7 @@ function disableCloneInteractivity(node) {
     try {
       element.inert = true;
     } catch (e) {
-      DBG?.warn("failed to set inert on clone", e);
+      debug?.warn("failed to set inert on clone", e);
     }
   }
 
@@ -395,7 +337,7 @@ function isValidContainer(container) {
  * @returns {number} Speed in pixels per frame at 60fps
  */
 function getSpeed(element) {
-  const speedAttr = element.getAttribute(ATTR_SPEED);
+  const speedAttr = element.getAttribute(attrSpeed);
   if (speedAttr) {
     const speed = Number.parseFloat(speedAttr);
     if (!Number.isNaN(speed) && speed > 0) {
@@ -412,7 +354,7 @@ function getSpeed(element) {
  */
 function findMarqueeElements(root = document) {
   if (!root?.querySelectorAll) return [];
-  return Array.from(root.querySelectorAll(`[${ATTR_MARQUEE}]`));
+  return Array.from(root.querySelectorAll(`[${attrMarquee}]`));
 }
 
 /**
@@ -426,24 +368,24 @@ export const Marquee = {
    */
   attach(container) {
     if (!isValidContainer(container)) {
-      DBG?.warn("invalid container element");
+      debug?.warn("invalid container element");
       return;
     }
 
     // Check if already attached
-    if (ACTIVE_INSTANCES.has(container)) {
-      DBG?.info("marquee already attached to element");
+    if (activeInstances.has(container)) {
+      debug?.info("marquee already attached to element");
       return;
     }
 
     const instance = new MarqueeInstance(container);
-    ACTIVE_INSTANCES.set(container, instance);
-    TRACKED_ELEMENTS.add(container);
+    activeInstances.set(container, instance);
+    trackedElements.add(container);
 
     const speed = getSpeed(container);
     instance.start({ speed });
 
-    DBG?.info("marquee attached", { speed });
+    debug?.info("marquee attached", { speed });
   },
 
   /**
@@ -453,16 +395,16 @@ export const Marquee = {
    */
   detach(container) {
     if (!isValidContainer(container)) {
-      DBG?.warn("invalid container element");
+      debug?.warn("invalid container element");
       return;
     }
 
-    const instance = ACTIVE_INSTANCES.get(container);
+    const instance = activeInstances.get(container);
     if (instance) {
       instance.stop();
-      ACTIVE_INSTANCES.delete(container);
-      TRACKED_ELEMENTS.delete(container);
-      DBG?.info("marquee detached");
+      activeInstances.delete(container);
+      trackedElements.delete(container);
+      debug?.info("marquee detached");
     }
   },
 
@@ -479,7 +421,7 @@ export const Marquee = {
 
     // Detach instances that no longer have the attribute or are not in document
     const toDetach = [];
-    for (const element of TRACKED_ELEMENTS) {
+    for (const element of trackedElements) {
       if (!currentSet.has(element) || !document.contains(element)) {
         toDetach.push(element);
       }
@@ -493,13 +435,13 @@ export const Marquee = {
     // Batch attach new elements
     let attached = 0;
     for (const element of currentElements) {
-      if (!ACTIVE_INSTANCES.has(element)) {
+      if (!activeInstances.has(element)) {
         this.attach(element);
         attached++;
       }
     }
 
-    DBG?.info("rescan completed", {
+    debug?.info("rescan completed", {
       found: currentElements.length,
       attached,
       detached: toDetach.length,
@@ -512,15 +454,15 @@ export const Marquee = {
  * Performs initial scan for marquee elements
  */
 export function init() {
-  if (_inited) return;
-  _inited = true;
+  if (inited) return;
+  inited = true;
 
   // Expose Marquee globally for browser usage
   if (typeof window !== "undefined") {
     window.Marquee = Marquee;
   }
 
-  DBG?.info("marquee feature initialized");
+  debug?.info("marquee feature initialized");
   Marquee.rescan();
 }
 
