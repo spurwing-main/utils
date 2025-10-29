@@ -1,11 +1,11 @@
 function hostScript() {
-  const here = new URL(import.meta.url, document.baseURI).href;
+  const currentScriptUrl = new URL(import.meta.url, document.baseURI).href;
   const scripts = document.getElementsByTagName("script");
-  for (const s of scripts) {
-    if (!s || !s.src) continue;
+  for (const script of scripts) {
+    if (!script || !script.src) continue;
     try {
-      const abs = new URL(s.src, document.baseURI).href;
-      if (abs === here) return s;
+      const absoluteUrl = new URL(script.src, document.baseURI).href;
+      if (absoluteUrl === currentScriptUrl) return script;
     } catch {
       // POLICY: ignore invalid script src URL while scanning for host script
     }
@@ -16,7 +16,7 @@ function hostScript() {
 function parseList(str) {
   return String(str || "")
     .split(/[,\s]+/)
-    .map((s) => s.trim())
+    .map((item) => item.trim())
     .filter(Boolean);
 }
 
@@ -31,92 +31,92 @@ function safe(_label, fn, fallback) {
 }
 
 /** Install a single shared debugger from attribute or localStorage (utils:debug). */
-function installDebuggerFromAttribute(scriptEl) {
+function installDebuggerFromAttribute(scriptElement) {
   if (window.__UTILS_DEBUG__) return;
-  const lsRaw = safe(
+  const localStorageValue = safe(
     "localStorage:get utils:debug",
     () => localStorage.getItem("utils:debug") || "",
     "",
   );
-  const fromAttr = scriptEl?.getAttribute?.("data-debug");
-  const raw = fromAttr !== null ? fromAttr : lsRaw;
-  if (raw === null) return; // opt-in only
+  const attributeValue = scriptElement?.getAttribute?.("data-debug");
+  const debugValue = attributeValue !== null ? attributeValue : localStorageValue;
+  if (debugValue === null) return; // opt-in only
 
-  const enableAll = raw === "" || raw === "*" || raw === "true" || raw === "1";
-  const enabled = enableAll ? null : new Set(parseList(raw));
+  const enableAll = debugValue === "" || debugValue === "*" || debugValue === "true" || debugValue === "1";
+  const enabledNamespaces = enableAll ? null : new Set(parseList(debugValue));
 
   window.__UTILS_DEBUG__ = {
-    enabled(ns) {
-      return enableAll || enabled?.has(ns);
+    enabled(namespace) {
+      return enableAll || enabledNamespaces?.has(namespace);
     },
-    createLogger(ns) {
-      const on = () => this.enabled(ns);
-      const tag = (_lvl, args) => ["[utils]", `[${ns}]`, ...args];
+    createLogger(namespace) {
+      const isEnabled = () => this.enabled(namespace);
+      const formatMessage = (_level, args) => ["[utils]", `[${namespace}]`, ...args];
       return {
         // Use console.info instead of console.log to satisfy lint rule allowing info/warn/error only.
-        debug: (...a) => {
-          if (on()) console.info(...tag("debug", a));
+        debug: (...args) => {
+          if (isEnabled()) console.info(...formatMessage("debug", args));
         },
-        info: (...a) => {
-          if (on()) console.info(...tag("info", a));
+        info: (...args) => {
+          if (isEnabled()) console.info(...formatMessage("info", args));
         },
-        warn: (...a) => {
-          if (on()) console.warn(...tag("warn", a));
+        warn: (...args) => {
+          if (isEnabled()) console.warn(...formatMessage("warn", args));
         },
-        error: (...a) => {
-          if (on()) console.error(...tag("error", a));
+        error: (...args) => {
+          if (isEnabled()) console.error(...formatMessage("error", args));
         },
         // time helpers expressed via info to satisfy lint (no console.time/timeEnd)
         time: (label) => {
-          if (on()) console.info(...tag("time", [label, "start"]));
+          if (isEnabled()) console.info(...formatMessage("time", [label, "start"]));
         },
         timeEnd: (label) => {
-          if (on()) console.info(...tag("timeEnd", [label, "end"]));
+          if (isEnabled()) console.info(...formatMessage("timeEnd", [label, "end"]));
         },
       };
     },
   };
 }
 
-const s = hostScript();
-installDebuggerFromAttribute(s);
+const scriptElement = hostScript();
+installDebuggerFromAttribute(scriptElement);
 
 const DBG = window.__UTILS_DEBUG__?.createLogger?.("loader");
 
-function resolveFeaturesList(scriptEl) {
-  const normalize = (arr) =>
-    arr
-      .map((s) => s.trim())
+function resolveFeaturesList(scriptElement) {
+  const normalize = (items) =>
+    items
+      .map((item) => item.trim())
       .filter(Boolean)
-      .map((s) => s.toLowerCase());
+      .map((item) => item.toLowerCase());
   // Attribute-only bootstrapping
-  const fromAttr = normalize(parseList(scriptEl?.dataset?.features));
-  return fromAttr;
+  const featuresFromAttribute = normalize(parseList(scriptElement?.dataset?.features));
+  return featuresFromAttribute;
 }
 
-const features = resolveFeaturesList(s);
+const features = resolveFeaturesList(scriptElement);
 const INITED_FEATURES = new Set();
 
 (async () => {
-  const VALID = /^[a-z0-9_-]+$/;
-  const uniq = Array.from(
-    new Set((features || []).map((n) => String(n).trim().toLowerCase()).filter(Boolean)),
+  const VALID_NAME_PATTERN = /^[a-z0-9_-]+$/;
+  const uniqueFeatures = Array.from(
+    new Set((features || []).map((name) => String(name).trim().toLowerCase()).filter(Boolean)),
   );
-  for (const name of uniq) {
-    if (!VALID.test(name)) {
-      DBG?.warn("invalid feature name:", name);
+  for (const featureName of uniqueFeatures) {
+    if (!VALID_NAME_PATTERN.test(featureName)) {
+      DBG?.warn("invalid feature name:", featureName);
       continue;
     }
     try {
-      const spec = new URL(`./features/${name}/index.js`, import.meta.url).href;
-      const mod = await import(spec);
-      const init = mod?.init ?? mod?.default?.init;
-      if (typeof init === "function" && !INITED_FEATURES.has(name)) {
+      const moduleUrl = new URL(`./features/${featureName}/index.js`, import.meta.url).href;
+      const module = await import(moduleUrl);
+      const init = module?.init ?? module?.default?.init;
+      if (typeof init === "function" && !INITED_FEATURES.has(featureName)) {
         await init();
-        INITED_FEATURES.add(name);
+        INITED_FEATURES.add(featureName);
       }
-    } catch (e) {
-      DBG?.warn("feature failed:", name, e);
+    } catch (error) {
+      DBG?.warn("feature failed:", featureName, error);
     }
   }
 })();

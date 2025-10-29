@@ -47,28 +47,28 @@ function hasNativeSrc(v) {
   return !!(v?.src || v?.currentSrc);
 }
 
-function selectedFirstManagedInContainer(container, INSTANCES) {
+function findFirstManagedVideoInContainer(container, INSTANCES) {
   if (!container) return null;
-  const nodes = container.querySelectorAll("video");
-  for (let i = 0; i < nodes.length; i++) {
-    const vid = nodes[i];
-    if (INSTANCES.has(vid)) return vid;
-    if (vid.hasAttribute(A.SRC)) return vid;
+  const videoElements = container.querySelectorAll("video");
+  for (let i = 0; i < videoElements.length; i++) {
+    const video = videoElements[i];
+    if (INSTANCES.has(video)) return video;
+    if (video.hasAttribute(A.SRC)) return video;
   }
   return null;
 }
 
-function resolvePointerContainer(v, selector) {
+function resolvePointerContainer(video, selector) {
   if (!selector) return null; // no selector → will bind on the video itself
   try {
-    const c = closest(v, selector);
-    return c || null;
+    const container = closest(video, selector);
+    return container || null;
   } catch {
     return null;
   }
 }
 
-function _ioVisible(entry, threshold) {
+function isIntersectionVisible(entry, threshold) {
   const ratio = entry?.intersectionRatio || 0;
   if (!Number.isFinite(threshold) || threshold <= 0) return ratio > 0; // threshold 0 => any intersection
   return ratio >= threshold;
@@ -230,7 +230,7 @@ Instance.prototype._setup = function () {
     const container = resolvePointerContainer(v, c.parentPointer);
     if (container) {
       // Determine ownership: only first managed descendant should bind
-      const first = selectedFirstManagedInContainer(container, this._INSTANCES);
+      const first = findFirstManagedVideoInContainer(container, this._INSTANCES);
       const owns = first ? first === v : true; // if none found, allow this instance to claim
       if (owns && !this._CONTAINER_CLAIMS.has(container)) {
         this._CONTAINER_CLAIMS.set(container, v);
@@ -541,7 +541,7 @@ Instance.prototype._onIntersect = function (entries) {
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
     if (e.target !== v) continue;
-    const isVis = _ioVisible(e, c.threshold);
+    const isVis = isIntersectionVisible(e, c.threshold);
     // Store only when state changes
     if (this._visible === isVis) continue;
     this._visible = isVis;
