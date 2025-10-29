@@ -348,7 +348,7 @@ class MarqueeInstance {
  * @returns {boolean} True if valid element node
  */
 function isValidContainer(container) {
-  return container && container.nodeType && container.nodeType === 1;
+  return container?.nodeType && container.nodeType === 1;
 }
 
 /**

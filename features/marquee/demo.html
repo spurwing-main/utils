@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marquee Feature Demo</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+    
+    .marquee-container {
+      overflow: hidden;
+      border: 2px solid #ccc;
+      padding: 1rem;
+      margin: 1rem 0;
+      background: #f5f5f5;
+    }
+    
+    .marquee-content {
+      display: inline-flex;
+      gap: 2rem;
+      white-space: nowrap;
+    }
+    
+    .marquee-item {
+      padding: 0.5rem 1rem;
+      background: white;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    button {
+      margin: 0.5rem 0.5rem 0.5rem 0;
+      padding: 0.5rem 1rem;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    button:hover {
+      background: #0056b3;
+    }
+    
+    button.stop {
+      background: #dc3545;
+    }
+    
+    button.stop:hover {
+      background: #c82333;
+    }
+  </style>
+</head>
+<body>
+  <h1>Marquee Feature Demo</h1>
+  
+  <p>This demonstrates the marquee feature - a standalone smooth scrolling animation module.</p>
+  
+  <h2>Basic Marquee</h2>
+  <div id="marquee1" class="marquee-container">
+    <div class="marquee-content">
+      <span class="marquee-item">Item 1</span>
+      <span class="marquee-item">Item 2</span>
+      <span class="marquee-item">Item 3</span>
+      <span class="marquee-item">Item 4</span>
+    </div>
+  </div>
+  <button onclick="startBasic()">Start</button>
+  <button class="stop" onclick="stopBasic()">Stop</button>
+  
+  <h2>Fast Marquee</h2>
+  <div id="marquee2" class="marquee-container">
+    <div class="marquee-content">
+      <span class="marquee-item">Fast Item 1</span>
+      <span class="marquee-item">Fast Item 2</span>
+      <span class="marquee-item">Fast Item 3</span>
+    </div>
+  </div>
+  <button onclick="startFast()">Start Fast</button>
+  <button class="stop" onclick="stopFast()">Stop</button>
+  
+  <h2>Features</h2>
+  <ul>
+    <li>Seamless looping without visible jumps</li>
+    <li>Respects <code>prefers-reduced-motion</code> user preference</li>
+    <li>Adaptive to container size changes</li>
+    <li>Clean DOM restoration on stop</li>
+    <li>No globals, no framework dependencies</li>
+  </ul>
+
+  <!-- Load marquee feature via loader -->
+  <script type="module" src="../loader.js" data-features="marquee" data-debug="marquee"></script>
+  
+  <script type="module">
+    import { Marquee } from '../features/marquee/index.js';
+    
+    window.startBasic = () => {
+      Marquee.start(document.getElementById('marquee1'), { speed: 1 });
+    };
+    
+    window.stopBasic = () => {
+      Marquee.stop(document.getElementById('marquee1'));
+    };
+    
+    window.startFast = () => {
+      Marquee.start(document.getElementById('marquee2'), { speed: 3 });
+    };
+    
+    window.stopFast = () => {
+      Marquee.stop(document.getElementById('marquee2'));
+    };
+  </script>
+</body>
+</html>
