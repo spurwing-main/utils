@@ -15,14 +15,14 @@ function warn(...args) {
 export function onControlClick(event, Video, INSTANCES) {
   const target = findActionFromEvent(event, INSTANCES);
   if (!target) return;
-  
+
   const action = String(target.action || "").toLowerCase();
   for (const video of target.videos) {
     if (action === "play") Video.play(video);
     else if (action === "pause") Video.pause(video);
     else Video.toggle(video);
   }
-  
+
   event.preventDefault?.();
   event.stopPropagation?.();
 }
@@ -36,16 +36,16 @@ export function onControlKeydown(event, Video, INSTANCES) {
 function findActionTarget(startElement, INSTANCES) {
   const doc = getDOC();
   let element = startElement;
-  
+
   while (element && element !== doc?.documentElement) {
     if (!element?.hasAttribute?.(attr.action)) {
       element = element.parentElement;
       continue;
     }
-    
+
     const action = element.getAttribute(attr.action);
     const selector = element.getAttribute(attr.target);
-    
+
     // Try selector first
     if (selector) {
       const videos = Array.from(doc.querySelectorAll(selector)).filter(
@@ -53,14 +53,14 @@ function findActionTarget(startElement, INSTANCES) {
       );
       if (videos.length) return { action, videos };
     }
-    
+
     // Find nearest managed video
     let parent = element;
     while (parent && parent !== doc.documentElement) {
       if (isVideo(parent) && INSTANCES.has(parent)) {
         return { action, videos: [parent] };
       }
-      
+
       const videos = parent.querySelectorAll?.("video");
       if (videos?.length) {
         for (const video of videos) {
@@ -71,7 +71,7 @@ function findActionTarget(startElement, INSTANCES) {
       }
       parent = parent.parentElement;
     }
-    
+
     warn("[video] control activated but no target video found");
     return null;
   }

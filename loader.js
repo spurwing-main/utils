@@ -26,7 +26,7 @@ function safe(fn, fallback) {
 
 function installDebugger(scriptElement) {
   if (window.__UTILS_DEBUG__) return;
-  
+
   const localStorageValue = safe(() => localStorage.getItem("utils:debug") || "", "");
   const attributeValue = scriptElement?.getAttribute?.("data-debug");
   const debugValue = attributeValue !== null ? attributeValue : localStorageValue;
@@ -85,15 +85,15 @@ const INITED_FEATURES = new Set();
 (async () => {
   const VALID_NAME = /^[a-z0-9_-]+$/;
   const uniqueFeatures = [...new Set(features)];
-  
+
   for (const name of uniqueFeatures) {
     if (!VALID_NAME.test(name)) {
       DBG?.warn("invalid feature name:", name);
       continue;
     }
-    
+
     if (INITED_FEATURES.has(name)) continue;
-    
+
     try {
       const url = new URL(`./features/${name}/index.js`, import.meta.url).href;
       const module = await import(url);

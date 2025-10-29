@@ -15,6 +15,7 @@ export const attr = {
 };
 
 export function logError(context, error) {
-  const debug = typeof window !== "undefined" ? window?.__UTILS_DEBUG__?.createLogger?.("video") : null;
+  const debug =
+    typeof window !== "undefined" ? window?.__UTILS_DEBUG__?.createLogger?.("video") : null;
   debug?.warn(`[video] ${context}`, error);
 }

@@ -383,16 +383,16 @@ test("marquee animation uses transform for movement", async () => {
   window.document.body.appendChild(container);
 
   mod.Marquee.attach(container);
-  
+
   // Give time for setup
   await new Promise((resolve) => setTimeout(resolve, 100));
 
   const wrapper = container.querySelector("div");
-  
+
   // Wrapper should be created with proper structure
   assert.ok(wrapper, "wrapper element created");
   assert.equal(wrapper.style.position, "absolute", "wrapper positioned absolutely");
-  
+
   // Animation uses transform (may be empty string initially in test env, but property exists)
   assert.ok("transform" in wrapper.style, "transform property available for animation");
 

@@ -1,6 +1,7 @@
 /* Marquee Feature – standalone smooth scrolling animation module */
 
-const debug = typeof window !== "undefined" ? window.__UTILS_DEBUG__?.createLogger?.("marquee") : null;
+const debug =
+  typeof window !== "undefined" ? window.__UTILS_DEBUG__?.createLogger?.("marquee") : null;
 
 let inited = false;
 const activeInstances = new WeakMap();
@@ -53,7 +54,7 @@ class MarqueeInstance {
       if (!this.animationId) return;
 
       if (this.resizeThrottleId) clearTimeout(this.resizeThrottleId);
-      
+
       this.resizeThrottleId = setTimeout(() => {
         this._measureContent();
         this._createClones();
@@ -172,7 +173,7 @@ class MarqueeInstance {
         clone.setAttribute("data-marquee-clone", "true");
         clone.setAttribute("aria-hidden", "true");
         if (clone.id) clone.removeAttribute("id");
-        
+
         disableCloneInteractivity(clone);
         fragment.appendChild(clone);
         this.clones.push(clone);
