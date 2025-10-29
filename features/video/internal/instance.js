@@ -406,7 +406,7 @@ Instance.prototype._requestPlay = function (trigger, priority = false) {
 
   // Hint inline playback
   if (!v.hasAttribute("playsinline")) v.setAttribute("playsinline", "");
-  
+
   // Handle muted state
   const enforceMuted = !!this.cfg.muted;
   if (enforceMuted) {
