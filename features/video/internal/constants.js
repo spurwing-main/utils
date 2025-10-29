@@ -1,31 +1,20 @@
-// Shared attribute names and centralized error logging for video feature
+export const attr = {
+  src: "data-video-src",
+  srcMob: "data-video-mob-src",
+  preload: "data-video-preload",
+  restartWhen: "data-video-restart-when",
+  loadWhen: "data-video-load-when",
+  playWhen: "data-video-play-when",
+  pauseWhen: "data-video-pause-when",
+  parentPointer: "data-video-parent-pointer",
+  threshold: "data-video-scroll-threshold",
+  margin: "data-video-scroll-margin",
+  muted: "data-video-muted",
+  action: "data-video-action",
+  target: "data-video-target",
+};
 
-export const A = Object.freeze({
-  SRC: "data-video-src",
-  SRC_MOB: "data-video-mob-src",
-  PRELOAD: "data-video-preload",
-  // New restart policy: space-separated tokens (finished, pointer-on, scroll)
-  RESTART_WHEN: "data-video-restart-when",
-  // Legacy boolean restart (pointer-on semantics); still recognized for backward compatibility
-  RESTART_LEGACY: "data-video-play-restart",
-  LOAD_WHEN: "data-video-load-when",
-  PLAY_WHEN: "data-video-play-when",
-  PAUSE_WHEN: "data-video-pause-when",
-  PARENT_POINTER: "data-video-parent-pointer",
-  THRESHOLD: "data-video-scroll-threshold",
-  MARGIN: "data-video-scroll-margin",
-  MUTED: "data-video-muted",
-  ACTION: "data-video-action",
-  TARGET: "data-video-target",
-});
-
-// Centralized error logger for video feature
 export function logError(context, error) {
-  try {
-    const DBG =
-      typeof window !== "undefined" ? window?.__UTILS_DEBUG__?.createLogger?.("video") : null;
-    DBG?.warn(`[video] ${context}`, error);
-  } catch {
-    // POLICY-EXCEPTION: debug logger unavailable
-  }
+  const debug = typeof window !== "undefined" ? window?.__UTILS_DEBUG__?.createLogger?.("video") : null;
+  debug?.warn(`[video] ${context}`, error);
 }

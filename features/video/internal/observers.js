@@ -3,7 +3,7 @@ Observer logic for video feature (modern browsers only)
 */
 
 import { isVideo, getDOC } from "./internal-utils.js";
-import { A } from "./constants.js";
+import { attr } from "./constants.js";
 
 // Mutation observation setup: attach on add, detach on remove.
 // Note: To keep the code minimal, we no longer auto-refresh on
@@ -13,38 +13,38 @@ export function setupMutationObserver(Video, _INSTANCES) {
   const doc = getDOC();
   if (!doc) return null;
 
-  const mo = new MutationObserver((list) => {
-    for (let i = 0; i < list.length; i++) {
-      const m = list[i];
-      if (m.type !== "childList") continue;
-      if (m.addedNodes) {
-        for (let j = 0; j < m.addedNodes.length; j++) {
-          const n = m.addedNodes[j];
-          if (n.nodeType !== 1) continue;
-          if (isVideo(n) && n.hasAttribute(A.SRC)) Video.attach(n);
-          else if (n.querySelectorAll) {
-            const vids = n.querySelectorAll(`video[${A.SRC}]`);
-            for (let k = 0; k < vids.length; k++) Video.attach(vids[k]);
+  const observer = new MutationObserver((mutations) => {
+    for (let i = 0; i < mutations.length; i++) {
+      const mutation = mutations[i];
+      if (mutation.type !== "childList") continue;
+      if (mutation.addedNodes) {
+        for (let j = 0; j < mutation.addedNodes.length; j++) {
+          const node = mutation.addedNodes[j];
+          if (node.nodeType !== 1) continue;
+          if (isVideo(node) && node.hasAttribute(attr.src)) Video.attach(node);
+          else if (node.querySelectorAll) {
+            const videos = node.querySelectorAll(`video[${attr.src}]`);
+            for (let k = 0; k < videos.length; k++) Video.attach(videos[k]);
           }
         }
       }
-      if (m.removedNodes) {
-        for (let j = 0; j < m.removedNodes.length; j++) {
-          const n = m.removedNodes[j];
-          if (n.nodeType !== 1) continue;
-          if (isVideo(n)) Video.detach(n);
-          else if (n.querySelectorAll) {
-            const vids = n.querySelectorAll("video");
-            for (let k = 0; k < vids.length; k++) Video.detach(vids[k]);
+      if (mutation.removedNodes) {
+        for (let j = 0; j < mutation.removedNodes.length; j++) {
+          const node = mutation.removedNodes[j];
+          if (node.nodeType !== 1) continue;
+          if (isVideo(node)) Video.detach(node);
+          else if (node.querySelectorAll) {
+            const videos = node.querySelectorAll("video");
+            for (let k = 0; k < videos.length; k++) Video.detach(videos[k]);
           }
         }
       }
     }
   });
 
-  mo.observe(doc.documentElement || doc.body, {
+  observer.observe(doc.documentElement || doc.body, {
     subtree: true,
     childList: true,
   });
-  return mo;
+  return observer;
 }
