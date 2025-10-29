@@ -82,6 +82,43 @@ Enable specific namespaces (comma separated):
 ## Features
 
 - **Video:** Attribute-driven lazy loading and delegated controls for `<video>` elements. See this README for usage examples.
+- **Marquee:** Standalone smooth scrolling animation module for creating seamless, endlessly looping content. Uses `data-marquee` attributes for configuration.
+
+### Marquee Usage
+
+The marquee feature provides automatic discovery of marquee elements via attributes:
+
+```html
+<script type="module" src="/loader.js" data-features="marquee"></script>
+
+<!-- Basic marquee with default speed (1px per frame at 60fps) -->
+<div data-marquee>
+  <span>Your content here</span>
+  <span>More content</span>
+</div>
+
+<!-- Custom speed marquee (3px per frame at 60fps) -->
+<div data-marquee data-marquee-speed="3">
+  <span>Fast content</span>
+</div>
+
+<script type="module">
+  import { Marquee } from './features/marquee/index.js';
+  
+  // Rescan to discover dynamically added elements
+  Marquee.rescan();
+</script>
+```
+
+**Key Features:**
+- Attribute-based configuration with `data-marquee` and `data-marquee-speed`
+- Automatic discovery via `init()` and `rescan()`
+- Consistent pixel-based speed across all marquees
+- Seamless looping without visible jumps
+- Respects `prefers-reduced-motion` user preference
+- Adaptive to container size changes
+- Clean DOM restoration on detach
+- No globals, no framework dependencies, no styling opinions
 
 ## Contributing
 

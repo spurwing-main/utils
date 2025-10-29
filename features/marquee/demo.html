@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marquee Feature Demo</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+    
+    .marquee-container {
+      overflow: hidden;
+      border: 2px solid #ccc;
+      padding: 1rem;
+      margin: 1rem 0;
+      background: #f5f5f5;
+    }
+    
+    .marquee-content {
+      display: inline-flex;
+      gap: 2rem;
+      white-space: nowrap;
+    }
+    
+    .marquee-item {
+      padding: 0.5rem 1rem;
+      background: white;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    button {
+      margin: 0.5rem 0.5rem 0.5rem 0;
+      padding: 0.5rem 1rem;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    button:hover {
+      background: #0056b3;
+    }
+    
+    button.danger {
+      background: #dc3545;
+    }
+    
+    button.danger:hover {
+      background: #c82333;
+    }
+    
+    code {
+      background: #f0f0f0;
+      padding: 0.2rem 0.4rem;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+  <h1>Marquee Feature Demo</h1>
+  
+  <p>This demonstrates the marquee feature - a standalone smooth scrolling animation module using declarative attributes.</p>
+  
+  <h2>Basic Marquee (default speed: 1px/frame)</h2>
+  <div class="marquee-container" data-marquee>
+    <div class="marquee-content">
+      <span class="marquee-item">Item 1</span>
+      <span class="marquee-item">Item 2</span>
+      <span class="marquee-item">Item 3</span>
+      <span class="marquee-item">Item 4</span>
+    </div>
+  </div>
+  <p><em>Automatically started by init(). Speed: <code>data-marquee-speed="1"</code> (default)</em></p>
+  
+  <h2>Fast Marquee (3px/frame)</h2>
+  <div class="marquee-container" data-marquee data-marquee-speed="3">
+    <div class="marquee-content">
+      <span class="marquee-item">Fast Item 1</span>
+      <span class="marquee-item">Fast Item 2</span>
+      <span class="marquee-item">Fast Item 3</span>
+    </div>
+  </div>
+  <p><em>Speed: <code>data-marquee-speed="3"</code></em></p>
+  
+  <h2>Slow Marquee (0.5px/frame)</h2>
+  <div class="marquee-container" data-marquee data-marquee-speed="0.5">
+    <div class="marquee-content">
+      <span class="marquee-item">Slow Item 1</span>
+      <span class="marquee-item">Slow Item 2</span>
+      <span class="marquee-item">Slow Item 3</span>
+    </div>
+  </div>
+  <p><em>Speed: <code>data-marquee-speed="0.5"</code></em></p>
+  
+  <h2>Dynamic Marquee</h2>
+  <div id="dynamic-container"></div>
+  <button onclick="addMarquee()">Add Marquee</button>
+  <button class="danger" onclick="removeMarquee()">Remove Marquee</button>
+  
+  <h2>How It Works</h2>
+  <ul>
+    <li><strong>Attribute-Based:</strong> Add <code>data-marquee</code> to any element to enable marquee</li>
+    <li><strong>Speed Control:</strong> Use <code>data-marquee-speed</code> for custom speed (pixels per frame at 60fps)</li>
+    <li><strong>Automatic Discovery:</strong> <code>init()</code> finds all marquees on load</li>
+    <li><strong>Dynamic Updates:</strong> Call <code>Marquee.rescan()</code> after adding/removing elements</li>
+    <li><strong>Consistent Speed:</strong> Same speed value = same visual speed across all marquees</li>
+  </ul>
+  
+  <h2>Features</h2>
+  <ul>
+    <li>Seamless looping without visible jumps</li>
+    <li>Respects <code>prefers-reduced-motion</code> user preference</li>
+    <li>Adaptive to container size changes</li>
+    <li>Clean DOM restoration on detach</li>
+    <li>No globals, no framework dependencies</li>
+  </ul>
+
+  <!-- Load marquee feature via loader -->
+  <script type="module" src="../loader.js" data-features="marquee" data-debug="marquee"></script>
+  
+  <script type="module">
+    import { Marquee } from '../features/marquee/index.js';
+    
+    let dynamicMarquee = null;
+    
+    window.addMarquee = () => {
+      if (dynamicMarquee) return;
+      
+      const container = document.getElementById('dynamic-container');
+      dynamicMarquee = document.createElement('div');
+      dynamicMarquee.className = 'marquee-container';
+      dynamicMarquee.setAttribute('data-marquee', '');
+      dynamicMarquee.setAttribute('data-marquee-speed', '2');
+      dynamicMarquee.innerHTML = `
+        <div class="marquee-content">
+          <span class="marquee-item">Dynamic 1</span>
+          <span class="marquee-item">Dynamic 2</span>
+          <span class="marquee-item">Dynamic 3</span>
+        </div>
+      `;
+      container.appendChild(dynamicMarquee);
+      
+      // Rescan to discover new marquee
+      Marquee.rescan();
+    };
+    
+    window.removeMarquee = () => {
+      if (!dynamicMarquee) return;
+      
+      // Remove attribute first so rescan will detach it
+      dynamicMarquee.removeAttribute('data-marquee');
+      
+      // Rescan to detach
+      Marquee.rescan();
+      
+      // Remove from DOM
+      dynamicMarquee.remove();
+      dynamicMarquee = null;
+    };
+  </script>
+</body>
+</html>
