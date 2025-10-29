@@ -65,11 +65,16 @@ class MarqueeInstance {
     }
 
     try {
+      // Throttle resize updates for better performance
+      let resizeTimeout;
       this.resizeObserver = new ResizeObserver(() => {
-        if (this.animationId) {
+        if (!this.animationId) return;
+
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
           this._measureContent();
-          this._createClones(); // Recreate clones when size changes
-        }
+          this._createClones();
+        }, 150);
       });
       this.resizeObserver.observe(this.container);
     } catch (e) {
@@ -118,8 +123,10 @@ class MarqueeInstance {
 
   _measureContent() {
     try {
-      const children = Array.from(this.wrapper.children);
-      const originalChildren = children.filter((el) => !el.hasAttribute("data-marquee-clone"));
+      // Filter during iteration for better performance
+      const originalChildren = Array.from(this.wrapper.children).filter(
+        (el) => !el.hasAttribute("data-marquee-clone"),
+      );
 
       if (originalChildren.length === 0) {
         this.contentWidth = this.wrapper.scrollWidth || 100;
@@ -140,11 +147,11 @@ class MarqueeInstance {
 
   _createClones() {
     try {
-      // Remove existing clones
+      // Remove existing clones efficiently
       for (const clone of this.clones) {
-        clone?.parentNode?.removeChild(clone);
+        clone?.remove();
       }
-      this.clones = [];
+      this.clones.length = 0;
 
       // Get original children (non-clones)
       const originalChildren = Array.from(this.wrapper.children).filter(
@@ -155,15 +162,20 @@ class MarqueeInstance {
       const containerWidth = this.container.offsetWidth || 300;
       const clonesNeeded = Math.max(1, Math.ceil(containerWidth / this.contentWidth) + 1);
 
+      // Use DocumentFragment for efficient batch DOM operations
+      const fragment = document.createDocumentFragment();
+
       for (let i = 0; i < clonesNeeded; i++) {
         for (const child of originalChildren) {
           const clone = child.cloneNode(true);
           clone.setAttribute("data-marquee-clone", "true");
           clone.setAttribute("aria-hidden", "true");
-          this.wrapper.appendChild(clone);
+          fragment.appendChild(clone);
           this.clones.push(clone);
         }
       }
+
+      this.wrapper.appendChild(fragment);
     } catch (e) {
       DBG?.warn("clone creation failed", e);
     }
@@ -182,29 +194,25 @@ class MarqueeInstance {
     }
 
     let lastTime = getTime();
+    const speedPerMs = speed / 16.67; // Pre-calculate for performance
 
     const tick = (currentTime) => {
-      try {
-        const delta = currentTime - lastTime;
-        lastTime = currentTime;
+      const delta = currentTime - lastTime;
+      lastTime = currentTime;
 
-        // Move by speed pixels per frame (adjusted for frame time)
-        this.offset += (speed * delta) / 16.67; // normalize to 60fps
+      // Move by speed pixels per frame (adjusted for frame time)
+      this.offset += speedPerMs * delta;
 
-        // Reset when we've scrolled one full content width
-        if (this.offset >= this.contentWidth) {
-          this.offset -= this.contentWidth;
-        }
-
-        // Update position
-        this.wrapper.style.transform = `translateX(-${this.offset}px)`;
-
-        // Continue animation
-        this.animationId = requestAnimationFrame(tick);
-      } catch (e) {
-        DBG?.error("animation tick failed", e);
-        this.stop();
+      // Reset when we've scrolled one full content width
+      if (this.offset >= this.contentWidth) {
+        this.offset -= this.contentWidth;
       }
+
+      // Update position - avoid string interpolation in hot path
+      this.wrapper.style.transform = "translateX(-" + this.offset + "px)";
+
+      // Continue animation
+      this.animationId = requestAnimationFrame(tick);
     };
 
     this.animationId = requestAnimationFrame(tick);
@@ -242,9 +250,11 @@ class MarqueeInstance {
     // Restore container styles
     if (this.originalOverflow !== undefined) {
       this.container.style.overflow = this.originalOverflow;
+      this.originalOverflow = undefined;
     }
     if (this.originalPosition !== undefined) {
       this.container.style.position = this.originalPosition;
+      this.originalPosition = undefined;
     }
 
     // Clean up resize observer
@@ -253,14 +263,16 @@ class MarqueeInstance {
       this.resizeObserver = null;
     }
 
-    // Clean up motion preference listener
+    // Clean up motion preference listener - prevent memory leaks
     if (this.motionMediaQuery && this.motionHandler) {
       this.motionMediaQuery.removeEventListener("change", this.motionHandler);
+      this.motionMediaQuery = null;
+      this.motionHandler = null;
     }
 
     // Reset state
     this.wrapper = null;
-    this.clones = [];
+    this.clones.length = 0; // Clear array efficiently
     this.offset = 0;
 
     DBG?.info("marquee stopped and cleaned up");
@@ -362,29 +374,33 @@ export const Marquee = {
   rescan(root = document) {
     // Find all current marquee elements
     const currentElements = findMarqueeElements(root);
+    const currentSet = new Set(currentElements);
 
     // Detach instances that no longer have the attribute or are not in document
     const toDetach = [];
     for (const element of TRACKED_ELEMENTS) {
-      if (!element.hasAttribute(ATTR_MARQUEE) || !document.contains(element)) {
+      if (!currentSet.has(element) || !document.contains(element)) {
         toDetach.push(element);
       }
     }
 
+    // Batch detach for efficiency
     for (const element of toDetach) {
       this.detach(element);
     }
 
-    // Attach new elements
+    // Batch attach new elements
+    let attached = 0;
     for (const element of currentElements) {
       if (!ACTIVE_INSTANCES.has(element)) {
         this.attach(element);
+        attached++;
       }
     }
 
     DBG?.info("rescan completed", {
       found: currentElements.length,
-      attached: currentElements.filter((el) => ACTIVE_INSTANCES.has(el)).length,
+      attached,
       detached: toDetach.length,
     });
   },
