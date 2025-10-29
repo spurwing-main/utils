@@ -7,7 +7,11 @@
 //
 // Side effect: increment window.__ALPHA_INITED__ counter.
 
+let _inited = false;
+
 export function init() {
+  if (_inited) return; // idempotent
+  _inited = true;
   if (typeof window !== "undefined") {
     window.__ALPHA_INITED__ = (window.__ALPHA_INITED__ || 0) + 1;
   }

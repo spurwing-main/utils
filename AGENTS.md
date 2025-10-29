@@ -1,175 +1,157 @@
-# Agent Development Guide
+# Agent Development Guide (KISS‑first)
 
-This document contains the project policies, development guidelines, and build rules for contributing to the utils repository. For user-facing documentation, see [`README.md`](README.md).
+This repo favors simple, explicit code. Keep agents tiny, predictable, and easy to delete. For user‑facing docs, see [`README.md`](README.md).
+
+## Principles
+
+- Keep it small: one clear responsibility per agent.
+- Be predictable: no hidden state, no top‑level side effects.
+- Fail loudly (but safely): never swallow errors silently.
+- Idempotent `init()`: multiple calls must be harmless.
+- Stable public surface: no reliance on internals in tests or consumers.
+
+## Working Method (always)
+
+- Begin complex work with a short checklist of 3–7 sub‑tasks.
+- Break problems into the smallest possible steps; solve with the simplest effective solution.
+- Provide complete working code unless told otherwise.
+- Focus on clarity over cleverness; every line must serve a clear purpose.
+- Remove redundancy and unnecessary abstractions; prefer explicit behavior.
 
 ## Project Policies
 
-A concise set of repository-wide rules to keep code explicit, low complexity, and consistent. Any intentional deviation MUST include an inline comment containing `POLICY-EXCEPTION:` with a short rationale.
+Any intentional deviation MUST include an inline `// POLICY-EXCEPTION: <reason>`.
 
 1. **Naming & Structure**
-   - Feature directories: lowercase only `[a-z0-9_-]+`.
-   - Export surface: each feature exports [`init()`](features/) (either named or via default object).
-   - Internal helpers stay file-scoped unless reused.
+   - Feature directories are lowercase `[a-z0-9_-]+`.
+   - Each feature exports an [`init()`](features/) (named or default object).
+   - Keep helpers file‑scoped unless reused.
 
-2. **Idempotent Initialization**
-   - [`init()`](features/) must tolerate multiple calls (loader ensures single effective run; extra calls no-op).
+2. **Initialization**
+   - No DOM mutations or network work at module top level (safe capability checks only).
+   - Do side effects inside `init()` (or functions it calls).
+   - `init()` must tolerate multiple calls (loader de‑dupes; extra calls no‑op).
 
-3. **Error Handling (No Silent Failures)**
-   - Empty `catch {}` blocks forbidden.
-   - Each catch must either:
-     - Log via gated debugger (`window.__UTILS_DEBUG__?.createLogger(namespace)`) OR
-     - Return a deterministic fallback with comment: `// POLICY: <reason>`
-   - Swallowing by design: add `// POLICY-EXCEPTION: <reason>`.
+3. **Errors & Logging**
+   - Empty `catch {}` is forbidden.
+   - In `catch`, either:
+     - Log via `window.__UTILS_DEBUG__?.createLogger(namespace)`, or
+     - Return a deterministic fallback with `// POLICY: <reason>`.
+   - Use `console.warn|error|info` for surfaced issues; avoid `console.log`.
 
-4. **Debug & Logging**
-   - Use only the namespaced logger for verbose tracing.
-   - `console.warn|error|info` allowed for surfaced operational issues; avoid `console.log` (lint warns).
-   - Enable via attribute or localStorage (see Debugging section).
+4. **Complexity**
+   - Prefer small pure helpers and early returns; avoid deep nesting.
+   - Centralize guarded ops with a `safe(label, fn)` helper when useful.
 
-5. **Side Effects & Imports**
-   - No DOM mutations or network work at module top-level besides safe capability detection.
-   - Feature side effects happen inside [`init()`](features/) (or functions it calls).
+5. **Loader Safety**
+   - Loader only accepts validated names (`^[a-z0-9_-]+$`), normalizes to lowercase, and prevents double init.
 
-6. **Complexity & Size**
-   - Prefer small pure helpers over repeated inline try/catch.
-   - Reuse a `safe(label, fn)` pattern to centralize guarded operations.
-   - Avoid deep nesting (>3 levels); early returns favored.
+6. **Lint, Format, Tests**
+   - Biome handles lint + format (see `biome.json`).
+   - Modern JS only: `no-var`, `prefer-const`, arrow callbacks, object shorthand.
+   - Tests assert documented behavior only (idempotence, events, validation).
 
-7. **Source Safety (Loader)**
-   - Loader only accepts validated feature names (`^[a-z0-9_-]+$`).
-   - Normalizes to lowercase before import and prevents double initialization.
+## Author Checklist
 
-8. **Policy Exceptions**
-   - Must include inline comment `// POLICY-EXCEPTION: reason`.
-   - PR / commit message should reference why the rule is temporarily waived.
-
-9. **Lint & Format (Biome)**
-   - Single tool: Biome handles lint + format. See `biome.json`.
-   - Enforce modern JS: `no-var`, `prefer-const`, object shorthand, arrow callbacks.
-   - No silent failures: `no-empty` enforced; catches must log or return fallback.
-   - Console usage limited: allow `console.info|warn|error` only.
-
-10. **Testing Contract**
-    - Feature tests assert only documented behavior (init idempotence, events, validation).
-    - No reliance on private internal symbols.
-
-## Agent Development Guide
-
-### Terminology
-
-- **Agent / Feature:** A directory under [`features/`](features/) with a lowercase name (`^[a-z0-9_-]+$`) exporting an [`init()`](features/) entry point.
-- **Managed Loader:** [`loader.js`](loader.js) which discovers and loads agents.
-- **Debug Logger:** Provided (when enabled) via `window.__UTILS_DEBUG__?.createLogger(namespace)`.
-
-### Structure Requirements
-
-- Directory: lowercase only (policy enforced by loader validation).
-- Entry file: `features/<name>/index.js`.
-- Must export:
-  - `export function init()` OR
-  - `export default { init }`
-- [`init()`](features/) MUST be idempotent (multiple calls cause no harmful side effects).
-- No module-top DOM mutations or network requests; defer to [`init()`](features/).
-
-### Repository Structure
-
-- Single-file by default per feature: `features/<name>/index.js` exporting `init()` (and optional API).
-- Add `features/<name>/core.js` only when `index.js` approaches ~200 lines or mixes distinct concerns (config parsing, instance logic, etc.).
-- Add `features/<name>/document-hooks.js` only when document-level listeners (delegated controls, observers) exceed ~80 lines or benefit from isolation.
-- Avoid nested `internal/` directories; keep paths flat and obvious.
-- Filenames are lowercase; dashes avoided unless readability clearly benefits.
-
-### Init Contract
-
-[`init()`](features/):
-
-1. Performs lightweight setup (event listeners, observers, mutation hooks).
-2. Avoids throwing; internal failures are contained and logged via debug logger.
-3. Must not assume presence of other agents unless explicitly documented.
-
-### Lifecycle States
-
-1. **Discovered:** Name requested via attribute.
-2. **Imported:** Dynamic `import()` of [`index.js`](features/) resolved.
-3. **Initialized:** [`init()`](features/) invoked (at most once per agent name per page).
-4. **Active:** Runtime observers / listeners attached.
-5. **Error** (optional): Initialization failure contained and logged by the feature.
-
-### Loader Interaction
-
-The loader ([`loader.js`](loader.js)) bootstraps via the `data-features` attribute only:
-
-- Reads feature names from the host script's `data-features`.
-- Normalizes names to lowercase and deduplicates.
-- Validates names (`^[a-z0-9_-]+$` only).
-- Initializes each feature at most once per page.
-- Does not emit loader-level events.
-
-### Events
-
-If emitting DOM `CustomEvent`s:
-
-- Prefix with concise namespace (example: video feature uses `video:*`).
-- Payload object must be stable and documented in the root README.
-- Events SHOULD NOT throw; wrap dispatch in safe handling.
-
-### Cross-Agent Independence
-
-- An agent must function (no uncaught failures) when any other agent is absent.
-- Shared util patterns (e.g. parsing helpers) may be copied if that reduces coupling; micro duplication preferred over premature shared abstractions.
-
-### Performance & Resource Hygiene
-
-- Attach observers/listeners only when necessary; detach on feature teardown if supported.
-- Avoid global intervals/timeouts unless strictly required; prefer event or observer driven flows.
-- Minimize synchronous layout thrash; batch DOM reads/writes if doing multiple operations.
-
-### Testing Expectations
-
-Tests (see `test/*`) should verify:
-
-- Single initialization (idempotence).
-- Correct event emission (if applicable).
-- Graceful handling of invalid configuration.
-- No reliance on private internal symbols (public surface only).
-
-### Author Checklist (Pre-Commit)
-
-- [ ] Directory name lowercase matches loader validation.
-- [ ] [`init()`](features/) exported and idempotent.
-- [ ] No silent catch blocks (each catch logs or documented with POLICY-EXCEPTION).
-- [ ] No top-level DOM mutations or premature network requests.
+- [ ] Directory name is lowercase and matches loader validation.
+- [ ] `init()` exported and idempotent; no top‑level side effects.
+- [ ] No silent catches; logs or documented fallbacks present.
 - [ ] Debug logging gated by `__UTILS_DEBUG__`.
-- [ ] Root README updated where applicable (attributes / API / events).
-- [ ] Lint/format passes (`npm run lint`, `npm run format`).
-- [ ] (If applicable) Tests updated or added.
+- [ ] README updated if attributes / API / events changed.
+- [ ] Lint/format pass; tests added/updated.
 
-### Agent Template
+## Structure
+
+- Entry: `features/<name>/index.js`
+- Optional when needed (keep tiny):
+  - `features/<name>/core.js` for split responsibilities when `index.js` grows.
+  - `features/<name>/document-hooks.js` for larger delegated listeners/observers.
+
+## Style & Behavior
+
+- naming: use camelCase for identifiers; filenames/directories remain lowercase per loader policy.
+- spacing: keep clean vertical spacing and logical grouping for readability.
+- functions: one function should do one thing well; keep hierarchy shallow and predictable.
+- organization: organize files and logic to match the real flow of the problem.
+- async: never use polling or timeouts when proper events or async patterns can be used.
+- validation: verify inputs, assumptions, and outputs at each step.
+- errors: handle errors gracefully and predictably; avoid surprising control flow.
+- comments: minimize; explain why when necessary.
+
+
+## Lifecycle
+
+1. Discovered → via `data-features` on the host script.
+2. Imported → dynamic `import()` resolves `index.js`.
+3. Initialized → `init()` called at most once per feature per page.
+4. Active → listeners/observers attached.
+5. Error → failures are contained and logged.
+
+After edits, test quickly and confirm results (lint, unit tests, local demos where applicable).
+
+## Events
+
+- Use a concise namespace (e.g., `video:*`).
+- Emit stable payload shapes and document them in `README.md`.
+- Wrap dispatch in safe handling; event emission must not throw.
+
+## Agent Template
 
 ```js
 // features/example/index.js
 const DBG = window.__UTILS_DEBUG__?.createLogger?.('example');
 
-let _inited = false;
+let initialized = false;
 
 export function init() {
-  if (_inited) return; // idempotent
-  _inited = true;
+  if (initialized) return; // idempotent
+  initialized = true;
   try {
-    // setup listeners / observers
-  } catch (e) {
-    try { DBG?.warn('init failure', e); } catch (_) {}
+    // setup listeners / observers here
+  } catch (error) {
+    try { DBG?.warn('init failure', error); } catch (_) {}
+    // POLICY: contain failures; agent should not crash the page
   }
 }
 
 export default { init };
 ```
 
-### Future Enhancements
-
-- Metrics hook (debug only) for measuring attach / init durations.
-- Prefer per-feature micro-helpers over cross-feature shared modules to keep structure simple. Duplicate tiny helpers if it reduces coupling and file hopping.
-
 ## Feature Naming Policy
 
-All feature directory names are lowercase. The loader normalizes requested feature names to lowercase and only accepts: `[a-z0-9_-]+`. (Example: request `Video` → loads `video`.)
+All feature directory names are lowercase. The loader normalizes requested feature names and only accepts `[a-z0-9_-]+` (e.g., request `Video` → loads `video`).
+
+## AI Execution Contract (foolproof)
+
+MUST do these, every time:
+- Begin with a 3–7 item checklist before complex work.
+- Break work into the smallest effective steps; implement the simplest solution first.
+- Produce complete working code unless the task explicitly asks otherwise.
+- Use camelCase for all identifiers; keep filenames/directories lowercase.
+- Prefer explicit code over implicit magic; each line must have purpose.
+- Validate inputs, assumptions, and outputs at each step.
+- Handle errors predictably; never allow silent failures.
+- Use events/async patterns; attach listeners/observers instead of polling.
+- After edits, run lint/tests quickly and confirm results.
+
+NEVER do these:
+- Do not use polling or timeouts when proper events/async are available.
+- Do not use the canvas tool.
+- Do not add legacy fallbacks or support deprecated/legacy platforms.
+- Do not introduce unnecessary abstractions or deep hierarchies.
+- Do not use UPPER_CASE identifiers unless explicitly requested.
+
+Implementation workflow (strict):
+1. Outline 3–7 sub‑tasks (short checklist).
+2. Implement step 1 with the simplest working code; keep functions focused.
+3. Validate inputs/assumptions/outputs; add gated logging if needed.
+4. Repeat for remaining steps; keep hierarchy shallow and explicit.
+5. Run lint/tests; address any failures immediately.
+6. Update docs if attributes/API/events changed.
+
+Validation gates (exit criteria):
+- `init()` is idempotent; no top‑level side effects.
+- No silent `catch {}`; logging or documented fallback present.
+- Identifiers camelCase; files/dirs lowercase; vertical spacing is clean.
+- No polling/timeouts used where events/async exist.
+- Tests for documented behavior pass locally.

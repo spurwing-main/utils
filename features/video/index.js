@@ -90,6 +90,7 @@ export const Video = {
 
 // Mutation observation
 let _booted = false;
+let _initScheduled = false;
 function boot() {
   const doc = getDOC();
   if (!doc || _booted) return;
@@ -106,8 +107,14 @@ function boot() {
 export function init() {
   const doc = getDOC();
   if (!doc) return;
-  if (doc.readyState === "complete" || doc.readyState === "interactive") boot();
-  else doc.addEventListener("DOMContentLoaded", boot, { once: true });
+  if (_booted) return; // already initialized
+  if (_initScheduled) return; // idempotent: do not schedule multiple listeners
+  _initScheduled = true;
+  if (doc.readyState === "complete" || doc.readyState === "interactive") {
+    boot();
+  } else {
+    doc.addEventListener("DOMContentLoaded", boot, { once: true });
+  }
 }
 
 export default { init, Video };

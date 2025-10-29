@@ -20,6 +20,7 @@ function safe(fn, fallback) {
   try {
     return fn();
   } catch {
+    // POLICY: capability detection fallback to avoid noisy logs in normal operation
     return fallback;
   }
 }
@@ -27,10 +28,10 @@ function safe(fn, fallback) {
 function installDebugger(scriptElement) {
   if (window.__UTILS_DEBUG__) return;
 
-  const localStorageValue = safe(() => localStorage.getItem("utils:debug") || "", "");
+  const localStorageValue = safe(() => localStorage.getItem("utils:debug"), null);
   const attributeValue = scriptElement?.getAttribute?.("data-debug");
   const debugValue = attributeValue !== null ? attributeValue : localStorageValue;
-  if (debugValue === null) return;
+  if (debugValue == null) return;
 
   const enableAll =
     debugValue === "" || debugValue === "*" || debugValue === "true" || debugValue === "1";
