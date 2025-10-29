@@ -342,8 +342,9 @@ test("marquee clones are hidden from assistive tech and not focusable", async ()
   }
 
   // Ensure nested focusable elements are also disabled
-  const nestedFocusables = container.querySelectorAll("[data-marquee-clone] " +
-    "a[href], button, input, select, textarea, [tabindex]");
+  const nestedFocusables = container.querySelectorAll(
+    "[data-marquee-clone] " + "a[href], button, input, select, textarea, [tabindex]",
+  );
   for (const el of nestedFocusables) {
     assert.equal(el.getAttribute("aria-hidden"), "true", "nested clone descendant hidden");
     assert.equal(el.getAttribute("tabindex"), "-1", "nested clone descendant unfocusable");
