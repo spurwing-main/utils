@@ -102,6 +102,13 @@ The marquee feature provides automatic discovery of marquee elements via attribu
   <span>Fast content</span>
 </div>
 
+<!-- The Marquee object is available globally after initialization -->
+<script>
+  // Rescan to discover dynamically added elements
+  window.Marquee.rescan();
+</script>
+
+<!-- Or use module imports if preferred -->
 <script type="module">
   import { Marquee } from './features/marquee/index.js';
   
@@ -113,12 +120,13 @@ The marquee feature provides automatic discovery of marquee elements via attribu
 **Key Features:**
 - Attribute-based configuration with `data-marquee` and `data-marquee-speed`
 - Automatic discovery via `init()` and `rescan()`
+- Globally accessible via `window.Marquee` after initialization
 - Consistent pixel-based speed across all marquees
 - Seamless looping without visible jumps
 - Respects `prefers-reduced-motion` user preference
 - Adaptive to container size changes
 - Clean DOM restoration on detach
-- No globals, no framework dependencies, no styling opinions
+- No framework dependencies, no styling opinions
 
 ## Contributing
 

@@ -456,6 +456,11 @@ export function init() {
   if (_inited) return;
   _inited = true;
 
+  // Expose Marquee globally for browser usage
+  if (typeof window !== "undefined") {
+    window.Marquee = Marquee;
+  }
+
   DBG?.info("marquee feature initialized");
   Marquee.rescan();
 }
