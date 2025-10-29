@@ -39,26 +39,23 @@ function hasNativeSrc(v) {
   return !!(v?.src || v?.currentSrc);
 }
 
-function findFirstManagedVideoInContainer(container, INSTANCES) {
+function findFirstVideo(container, INSTANCES) {
   if (!container) return null;
-  const videoElements = container.querySelectorAll("video");
-  for (let i = 0; i < videoElements.length; i++) {
-    const video = videoElements[i];
-    if (INSTANCES.has(video)) return video;
-    if (video.hasAttribute(A.SRC)) return video;
+  const videos = container.querySelectorAll("video");
+  for (let i = 0; i < videos.length; i++) {
+    const video = videos[i];
+    if (INSTANCES.has(video) || video.hasAttribute(A.SRC)) return video;
   }
   return null;
 }
 
-function resolvePointerContainer(video, selector) {
-  if (!selector) return null;
-  return closest(video, selector);
+function findPointerContainer(video, selector) {
+  return selector ? closest(video, selector) : null;
 }
 
-function isIntersectionVisible(entry, threshold) {
+function isVisible(entry, threshold) {
   const ratio = entry?.intersectionRatio || 0;
-  if (!Number.isFinite(threshold) || threshold <= 0) return ratio > 0; // threshold 0 => any intersection
-  return ratio >= threshold;
+  return !Number.isFinite(threshold) || threshold <= 0 ? ratio > 0 : ratio >= threshold;
 }
 
 // Instance class
@@ -199,10 +196,10 @@ Instance.prototype._setup = function () {
 
   // Pointer observation (desktop only)
   if (c.pointerEnabled && (c.load.onPointer || c.play.onPointer || c.pause.onPointerOff)) {
-    const container = resolvePointerContainer(v, c.parentPointer);
+    const container = findPointerContainer(v, c.parentPointer);
     if (container) {
       // Determine ownership: only first managed descendant should bind
-      const first = findFirstManagedVideoInContainer(container, this._INSTANCES);
+      const first = findFirstVideo(container, this._INSTANCES);
       const owns = first ? first === v : true; // if none found, allow this instance to claim
       if (owns && !this._CONTAINER_CLAIMS.has(container)) {
         this._CONTAINER_CLAIMS.set(container, v);
@@ -471,7 +468,7 @@ Instance.prototype._onIntersect = function (entries) {
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
     if (e.target !== v) continue;
-    const isVis = isIntersectionVisible(e, c.threshold);
+    const isVis = isVisible(e, c.threshold);
     // Store only when state changes
     if (this._visible === isVis) continue;
     this._visible = isVis;

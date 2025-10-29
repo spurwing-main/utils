@@ -13,16 +13,16 @@ function warn(...args) {
 
 // Delegated controls - these handlers require INSTANCES to be passed
 export function onControlClick(event, Video, INSTANCES) {
-  const target = resolveActionFromEvent(event, INSTANCES);
+  const target = findActionFromEvent(event, INSTANCES);
   if (!target) return;
+  
   const action = String(target.action || "").toLowerCase();
-  const videos = target.videos;
-  for (let i = 0; i < videos.length; i++) {
-    const video = videos[i];
+  for (const video of target.videos) {
     if (action === "play") Video.play(video);
     else if (action === "pause") Video.pause(video);
     else Video.toggle(video);
   }
+  
   event.preventDefault?.();
   event.stopPropagation?.();
 }
@@ -33,64 +33,62 @@ export function onControlKeydown(event, Video, INSTANCES) {
   onControlClick(event, Video, INSTANCES);
 }
 
-function resolveActionTarget(startElement, INSTANCES) {
+function findActionTarget(startElement, INSTANCES) {
   const doc = getDOC();
   let element = startElement;
+  
   while (element && element !== doc?.documentElement) {
-    if (element?.hasAttribute?.(A.ACTION)) {
-      const action = element.getAttribute(A.ACTION);
-      const selector = element.getAttribute(A.TARGET);
-      let targetVideos = [];
-      if (selector) {
-        targetVideos = Array.from(doc.querySelectorAll(selector)).filter(
-          (node) => isVideo(node) && INSTANCES.has(node),
-        );
+    if (!element?.hasAttribute?.(A.ACTION)) {
+      element = element.parentElement;
+      continue;
+    }
+    
+    const action = element.getAttribute(A.ACTION);
+    const selector = element.getAttribute(A.TARGET);
+    
+    // Try selector first
+    if (selector) {
+      const videos = Array.from(doc.querySelectorAll(selector)).filter(
+        (node) => isVideo(node) && INSTANCES.has(node),
+      );
+      if (videos.length) return { action, videos };
+    }
+    
+    // Find nearest managed video
+    let parent = element;
+    while (parent && parent !== doc.documentElement) {
+      if (isVideo(parent) && INSTANCES.has(parent)) {
+        return { action, videos: [parent] };
       }
-      if (!targetVideos.length) {
-        // nearest or descendant managed video (instance exists)
-        let parent = element;
-        while (parent && parent !== doc.documentElement) {
-          if (isVideo(parent) && INSTANCES.has(parent)) {
-            targetVideos = [parent];
-            break;
+      
+      const videos = parent.querySelectorAll?.("video");
+      if (videos?.length) {
+        for (const video of videos) {
+          if (INSTANCES.has(video)) {
+            return { action, videos: [video] };
           }
-          const videoList = parent.querySelectorAll?.("video");
-          if (videoList?.length) {
-            for (let i = 0; i < videoList.length; i++) {
-              const videoNode = videoList[i];
-              if (INSTANCES.has(videoNode)) {
-                targetVideos = [videoNode];
-                break;
-              }
-            }
-            if (targetVideos.length) break;
-          }
-          parent = parent.parentElement;
         }
       }
-      if (!targetVideos.length) {
-        warn("[video] control activated but no target video found");
-        return null;
-      }
-      return { action, videos: targetVideos };
+      parent = parent.parentElement;
     }
-    element = element.parentElement;
+    
+    warn("[video] control activated but no target video found");
+    return null;
   }
   return null;
 }
 
-function resolveActionFromEvent(event, INSTANCES) {
+function findActionFromEvent(event, INSTANCES) {
   const eventPath = typeof event.composedPath === "function" ? event.composedPath() : null;
   if (Array.isArray(eventPath)) {
-    for (let i = 0; i < eventPath.length; i++) {
-      const node = eventPath[i];
-      if (node && node.nodeType === 1 && node.hasAttribute?.(A.ACTION)) {
-        const result = resolveActionTarget(node, INSTANCES);
+    for (const node of eventPath) {
+      if (node?.nodeType === 1 && node.hasAttribute?.(A.ACTION)) {
+        const result = findActionTarget(node, INSTANCES);
         if (result) return result;
       }
     }
   }
-  return resolveActionTarget(event.target, INSTANCES);
+  return findActionTarget(event.target, INSTANCES);
 }
 
 // Setup delegated control listeners
