@@ -118,6 +118,26 @@ test("marquee init is idempotent", async () => {
   assert.ok(true, "init can be called multiple times without error");
 });
 
+test("marquee is exposed globally on window after init", async () => {
+  const { window } = await setupDom();
+  const mod = await importMarqueeFeatureFresh();
+
+  // Before init, window.Marquee should not exist
+  assert.equal(window.Marquee, undefined, "Marquee not on window before init");
+
+  // Initialize the feature
+  mod.init();
+
+  // After init, window.Marquee should be available
+  assert.ok(window.Marquee, "Marquee is available on window after init");
+  assert.ok(typeof window.Marquee.rescan === "function", "window.Marquee.rescan is a function");
+  assert.ok(typeof window.Marquee.attach === "function", "window.Marquee.attach is a function");
+  assert.ok(typeof window.Marquee.detach === "function", "window.Marquee.detach is a function");
+
+  // Verify it's the same object as the exported one
+  assert.strictEqual(window.Marquee, mod.Marquee, "window.Marquee is the same as exported Marquee");
+});
+
 test("marquee attach can be called without errors", async () => {
   const { window } = await setupDom();
   const mod = await importMarqueeFeatureFresh();
