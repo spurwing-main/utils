@@ -1,8 +1,13 @@
 {
   "name": "@tim-spw/utils",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "type": "module",
-  "files": ["loader.js", "features/video/**/*.js", "features/marquee/**/*.js", "README.md"],
+  "files": [
+    "loader.js",
+    "features/video/**/*.js",
+    "features/marquee/**/*.js",
+    "README.md"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -19,7 +24,10 @@
     "./marquee": "./features/marquee/index.js",
     "./features/*": "./features/*"
   },
-  "sideEffects": ["loader.js", "features/**"],
+  "sideEffects": [
+    "loader.js",
+    "features/**"
+  ],
   "engines": {
     "node": ">=18"
   },
