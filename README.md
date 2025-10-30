@@ -42,7 +42,7 @@ Version-pinned (recommended):
 
 ```html
 <script type="module"
-src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.7/loader.js"
+src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.13/loader.js"
 data-features="video"
 data-debug="loader">
 </script>
@@ -55,7 +55,7 @@ Latest tag (auto-updating; not recommended for production stability):
   data-features="video"></script>
 ```
 
-Update the `@0.1.0` segment when publishing a new release; the exported `VERSION` constant mirrors [`package.json`](package.json).
+Update the `@0.1.13` segment when publishing a new release; the exported `VERSION` constant mirrors [`package.json`](package.json).
 
 ## Publishing (CI)
 

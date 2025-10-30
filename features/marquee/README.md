@@ -11,6 +11,7 @@ The marquee feature is a tiny, standalone module whose only job is to make marke
 - **Attribute-Based**: Uses `data-marquee` and `data-marquee-speed` attributes for configuration
 - **Automatic Discovery**: `init()` and `rescan()` automatically find and manage elements
 - **Scoped Rescans**: `rescan(root)` only touches marquees inside the provided root (or the whole document by default)
+- **Natural Container Height**: Uses CSS Grid to automatically size container to content height - no explicit heights needed
 - **Consistent Speed**: Speed is expressed in pixels per frame at 60fps, giving identical motion for equal values
 - **Attribute-Aware**: Speed updates react immediately; removing `data-marquee` detaches the instance automatically
 - **Seamless Looping**: Content is cloned and animated with transforms for smooth, jump-free scrolling
@@ -153,14 +154,16 @@ All marquees with the same speed value will scroll at the same visual speed, reg
 ## How It Works
 
 1. **Preparation**: When attached:
-   - Saves the original DOM state
-   - Wraps content in a positioning container
+   - Saves the original DOM state and display style
+   - Wraps content in a CSS Grid container for natural height
+   - Sets container to `display: grid` with `grid-template-columns: 1fr`
+   - Positions wrapper using `grid-area: 1/1` (overlays in same grid cell)
    - Clones the content to create a seamless loop
    - Sanitizes clones (removes duplicate IDs, hides from assistive tech, disables focus)
    - Measures content width for proper looping
 
 2. **Animation**: Uses `requestAnimationFrame` to:
-   - Update position smoothly at 60fps
+   - Update position smoothly at 60fps using CSS transforms
    - Reset position when one loop completes
    - Create the illusion of endless scrolling
 
@@ -172,7 +175,8 @@ All marquees with the same speed value will scroll at the same visual speed, reg
 4. **Cleanup**: When detached:
    - Cancels animation frame
    - Restores original nodes (so existing event listeners remain intact)
-   - Restores original styles
+   - Restores original display and overflow styles
+   - Removes grid styling
    - Disconnects observers
    - Releases all resources
 
@@ -180,6 +184,7 @@ All marquees with the same speed value will scroll at the same visual speed, reg
 
 Modern evergreen browsers only. The marquee requires:
 
+- CSS Grid (`display: grid`, `grid-area`)
 - `ResizeObserver`
 - `requestAnimationFrame`
 - `matchMedia('(prefers-reduced-motion)')`

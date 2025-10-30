@@ -179,7 +179,7 @@ function createInstance(container) {
 
   const wrapper = doc.createElement("div");
   wrapper.style.cssText =
-    "display:inline-flex;white-space:nowrap;position:absolute;left:0;top:0;will-change:transform";
+    "display:inline-flex;white-space:nowrap;will-change:transform;grid-area:1/1";
 
   const originals = Array.from(container.childNodes);
   for (const node of originals) {
@@ -187,13 +187,11 @@ function createInstance(container) {
   }
 
   const originalOverflow = container.style.overflow;
-  const originalPosition = container.style.position;
-  const adjustPosition = !originalPosition || originalPosition === "static";
+  const originalDisplay = container.style.display;
 
   container.style.overflow = "hidden";
-  if (adjustPosition) {
-    container.style.position = "relative";
-  }
+  container.style.display = "grid";
+  container.style.gridTemplateColumns = "1fr";
 
   container.append(wrapper);
 
@@ -215,8 +213,7 @@ function createInstance(container) {
     motionQuery: null,
     motionHandler: null,
     originalOverflow,
-    originalPosition,
-    adjustPosition,
+    originalDisplay,
     requestAnimationFrame: view.requestAnimationFrame.bind(view),
     cancelAnimationFrame: view.cancelAnimationFrame.bind(view),
     mutationObserver: null,
@@ -416,9 +413,8 @@ function detach(container) {
   state.wrapper.remove();
 
   state.container.style.overflow = state.originalOverflow;
-  if (state.adjustPosition) {
-    state.container.style.position = state.originalPosition;
-  }
+  state.container.style.display = state.originalDisplay;
+  state.container.style.gridTemplateColumns = "";
 
   instances.delete(container);
   debug?.info("marquee detached");

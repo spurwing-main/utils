@@ -20,7 +20,7 @@ Include the loader and enable the `video` feature:
 ```html
 <!-- CDN example (pin a version in production) -->
 <script type="module"
-  src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.7/loader.js"
+  src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.13/loader.js"
   data-features="video"
   data-debug="video"><!-- remove data-debug in prod --></script>
 ```

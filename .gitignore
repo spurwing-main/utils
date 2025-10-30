@@ -1,21 +1,13 @@
-############################################
-# Node/JS ecosystem
-############################################
 node_modules/
 .npm-cache/
 .npm-cache-tmp/
 .pnpm-store/
 
-# Lockfiles
-# We track npm's package-lock.json for deterministic CI installs and caching.
-# If using other managers, keep their lockfiles untracked unless you intend to switch.
-# package-lock.json (tracked)
-# pnpm-lock.yaml (ignored by default)
-# yarn.lock (ignored by default)
+.claude
+
 pnpm-lock.yaml
 yarn.lock
 
-# Logs & caches
 *.log
 npm-debug.log*
 yarn-debug.log*

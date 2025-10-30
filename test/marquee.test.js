@@ -391,7 +391,8 @@ test("marquee animation uses transform for movement", async () => {
 
   // Wrapper should be created with proper structure
   assert.ok(wrapper, "wrapper element created");
-  assert.equal(wrapper.style.position, "absolute", "wrapper positioned absolutely");
+  assert.ok(wrapper.style.gridArea.includes("1"), "wrapper positioned using grid-area");
+  assert.equal(container.style.display, "grid", "container uses grid display");
 
   // Animation uses transform (may be empty string initially in test env, but property exists)
   assert.ok("transform" in wrapper.style, "transform property available for animation");
@@ -416,7 +417,7 @@ test("marquee uses GPU-accelerated transform for performance", async () => {
     // Check for performance-optimized styles
     const cssText = wrapper.style.cssText;
     assert.ok(cssText.includes("will-change"), "uses will-change hint for browser optimization");
-    assert.equal(wrapper.style.position, "absolute", "uses absolute positioning");
+    assert.ok(cssText.includes("grid-area"), "uses grid-area for positioning");
     assert.ok(cssText.includes("display"), "has display property set");
     assert.ok(cssText.includes("white-space"), "has white-space property set");
   } else {
@@ -575,10 +576,9 @@ test("marquee performance: no layout thrashing", async () => {
   const wrapper = container.querySelector("div");
 
   if (wrapper) {
-    // Verify only transform is used (no layout-triggering properties)
-    assert.ok(wrapper.style.cssText.includes("left"), "left is configured");
-    assert.ok(wrapper.style.cssText.includes("top"), "top is configured");
-    assert.equal(wrapper.style.position, "absolute", "uses absolute positioning");
+    // Verify grid-based positioning with transform for movement
+    assert.ok(wrapper.style.cssText.includes("grid-area"), "grid-area is configured");
+    assert.equal(container.style.display, "grid", "uses grid display");
     // Position changes via transform only (checked by implementation)
   } else {
     // Test timing issue

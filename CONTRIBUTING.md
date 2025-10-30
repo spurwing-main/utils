@@ -79,7 +79,7 @@ Lean flow: push to `main`.
 - Requirements: `NPM_TOKEN` repo secret with publish permission.
 
 ### Notes
-- No `package-lock.json` in repo (library package). `.npmrc` disables lockfile creation.
+- `package-lock.json` is tracked in the repo for deterministic CI installs and caching (see `.npmrc`).
 - Runtime is dependency‑free; dev tooling uses Biome and `jsdom` for tests.
 
 See also: [`AGENTS.md`](AGENTS.md) for development rules.
