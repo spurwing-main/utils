@@ -10,12 +10,13 @@ The marquee feature is a tiny, standalone module whose only job is to make marke
 
 - **Attribute-Based**: Uses `data-marquee` and `data-marquee-speed` attributes for configuration
 - **Automatic Discovery**: `init()` and `rescan()` automatically find and manage elements
-- **Consistent Speed**: Speed is in pixels per frame at 60fps - same speed value means same visual speed
-- **Seamless Looping**: Content is cloned and animated with transform for smooth, jump-free scrolling
-- **Motion Preferences**: Honors `prefers-reduced-motion` to avoid animations for users who don't want them
-- **Adaptive**: Uses ResizeObserver to adjust when container sizes change
+- **Scoped Rescans**: `rescan(root)` only touches marquees inside the provided root (or the whole document by default)
+- **Consistent Speed**: Speed is expressed in pixels per frame at 60fps, giving identical motion for equal values
+- **Attribute-Aware**: Speed updates react immediately; removing `data-marquee` detaches the instance automatically
+- **Seamless Looping**: Content is cloned and animated with transforms for smooth, jump-free scrolling
+- **Motion Preferences**: Honors `prefers-reduced-motion`; animation stops immediately when reduction is requested
+- **Adaptive**: Uses `ResizeObserver` to react to meaningful width changes (and only dramatic height shifts) without timers
 - **Clean Cleanup**: Restores the exact DOM nodes (including event listeners) and releases all resources when detached
-- **No Dependencies**: No globals, no framework ties, no styling opinions
 - **Accessible by Design**: Cloned nodes are hidden from assistive tech, stripped of duplicate IDs, and prevented from stealing focus
 
 ## Usage
@@ -54,24 +55,34 @@ document.body.appendChild(container);
 Marquee.rescan();
 ```
 
+### Attribute Updates
+
+Changing marquee attributes on an attached element is instant:
+
+- Updating `data-marquee-speed` recalculates measurements and motion without rescanning.
+- Removing `data-marquee` automatically detaches and restores the original DOM.
+- Re-adding `data-marquee` lets `Marquee.rescan()` or `Marquee.attach()` re-enable the marquee.
+
 ## API
 
 ### `Marquee.rescan(root)`
 
-Scans the document (or provided root element) for elements with `data-marquee` attribute and syncs state:
-- Attaches new elements that have the attribute
-- Detaches elements that no longer have the attribute
+Synchronises marquee instances with the DOM. The scan is limited to the supplied root (defaults to `document`).
+
+- Attaches new elements inside the root that have the `data-marquee` attribute
+- Detaches tracked elements that lost the attribute or were removed from the DOM (within the root scope)
 
 **Parameters:**
-- `root` (Document|Element, optional): Root element to scan from. Defaults to `document`.
+- `root` (Document|Element, optional): Area of the DOM to update. Use `document` to rescan everything.
 
 **Example:**
 ```javascript
 // Scan entire document
 Marquee.rescan();
 
-// Scan specific container
-Marquee.rescan(document.getElementById('my-container'));
+// Scan a specific container without touching marquees elsewhere
+const section = document.getElementById('my-container');
+Marquee.rescan(section);
 ```
 
 ### `Marquee.attach(element)`
@@ -154,9 +165,9 @@ All marquees with the same speed value will scroll at the same visual speed, reg
    - Create the illusion of endless scrolling
 
 3. **Adaptation**: Uses `ResizeObserver` to:
-   - Detect container size changes
-   - Recalculate content measurements
-   - Adjust clones as needed
+   - Detect meaningful width changes in the container or wrapper
+   - Ignore minor jitter while still reacting to dramatic height shifts
+   - Recalculate content measurements and adjust clones as needed
 
 4. **Cleanup**: When detached:
    - Cancels animation frame
@@ -167,9 +178,13 @@ All marquees with the same speed value will scroll at the same visual speed, reg
 
 ## Browser Compatibility
 
-- Modern browsers with `requestAnimationFrame` support
-- Optional `ResizeObserver` for adaptive sizing (degrades gracefully)
-- Respects `prefers-reduced-motion` media query
+Modern evergreen browsers only. The marquee requires:
+
+- `ResizeObserver`
+- `requestAnimationFrame`
+- `matchMedia('(prefers-reduced-motion)')`
+
+There are no legacy fallbacks.
 
 ## Demo
 

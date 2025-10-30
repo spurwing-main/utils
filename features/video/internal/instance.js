@@ -9,10 +9,10 @@ import {
   parseThresholdInput,
   parseRootMargin,
   closest,
-  getWIN as getWin,
-  getDOC as getDoc,
+  getWindow,
+  getDocument,
 } from "./internal-utils.js";
-import { attr, logError } from "./constants.js";
+import { attr, logError, MOBILE_BREAKPOINT } from "./constants.js";
 const PRIORITY_PLAY_MS = 120; // pointer-on priority window to override hidden-pause
 
 function emit(el, name, detail) {
@@ -23,7 +23,7 @@ function emit(el, name, detail) {
   }
 }
 function log(...args) {
-  getWin()
+  getWindow()
     .__UTILS_DEBUG__?.createLogger?.("video")
     ?.debug(...args);
 }
@@ -32,7 +32,7 @@ function warn(...args) {
 }
 
 function envHasHover() {
-  return getWin().matchMedia?.("(hover: hover) and (pointer: fine)")?.matches === true;
+  return getWindow().matchMedia?.("(hover: hover) and (pointer: fine)")?.matches === true;
 }
 
 function hasNativeSrc(v) {
@@ -69,16 +69,8 @@ export function Instance(video, { INSTANCES, CONTAINER_CLAIMS }) {
   if (hasNativeSrc(video)) {
     warn("[video] native src/currentSrc present but ignored due to data-video-src");
     // Best-effort neutralization to avoid unintended network work before triggers.
-    try {
-      video.removeAttribute("src");
-    } catch (e) {
-      logError("removeAttribute src failed", e);
-    }
-    try {
-      video.src = "";
-    } catch (e) {
-      logError("clear src failed", e);
-    }
+    video.removeAttribute("src");
+    video.src = "";
     try {
       video.load();
     } catch (e) {
@@ -180,7 +172,7 @@ Instance.prototype._setup = function () {
   // Visibility observation (modern browsers only)
   const needsVis = c.load.onScroll || c.play.onVisible || c.pause.onHidden;
   if (needsVis) {
-    const w = getWin();
+    const w = getWindow();
     this.io = new w.IntersectionObserver(
       (entries) => {
         this._onIntersect(entries);
@@ -313,7 +305,7 @@ Instance.prototype._pickSrc = function () {
   const src = this.srcPrimary;
   const mob = this.srcMobile;
   if (!src && !mob) return null;
-  const isMob = getWin().matchMedia?.("(max-width: 812px)")?.matches === true;
+  const isMob = getWindow().matchMedia?.(`(max-width: ${MOBILE_BREAKPOINT})`)?.matches === true;
   return isMob && mob ? mob : src || mob;
 };
 
@@ -331,7 +323,7 @@ Instance.prototype._pickAlternate = function () {
 Instance.prototype._applySrc = function (url) {
   const v = this.v;
   try {
-    new URL(url, getDoc()?.baseURI);
+    new URL(url, getDocument()?.baseURI);
   } catch (e) {
     emit(v, "video:error", { trigger: "manual", reason: "invalid-url", url: String(url) });
     throw e;
@@ -339,16 +331,8 @@ Instance.prototype._applySrc = function (url) {
   v.src = url;
   this.chosenSrc = url;
   // Remove data source attributes to lock selection (do not remove trigger config)
-  try {
-    v.removeAttribute(attr.src);
-  } catch (e) {
-    logError("remove data-video-src failed", e);
-  }
-  try {
-    v.removeAttribute(attr.srcMob);
-  } catch (e) {
-    logError("remove data-video-mob-src failed", e);
-  }
+  v.removeAttribute(attr.src);
+  v.removeAttribute(attr.srcMob);
 };
 
 Instance.prototype._ensureLoaded = function (trigger) {
@@ -444,8 +428,7 @@ Instance.prototype._requestPlay = function (trigger, priority = false) {
   }
   this._lastPlayTrigger = trigger;
   if (priority) {
-    const w = getWin();
-    this._lastPriorityPlayAt = w.performance?.now?.() ?? Date.now();
+    this._lastPriorityPlayAt = Date.now();
   }
   if (isPointerOn || trigger === "manual") this._pausedByPointerOff = false;
 };
@@ -483,8 +466,7 @@ Instance.prototype._onIntersect = function (entries) {
   if (loadNow) this._ensureLoaded("visible");
   if (pauseNow) {
     // Same-frame conflict: if a priority pointer-on just happened, let play win
-    const w = getWin();
-    const now = w.performance?.now?.() ?? Date.now();
+    const now = Date.now();
     if (this._lastPriorityPlayAt && now - this._lastPriorityPlayAt < PRIORITY_PLAY_MS) {
       // Skip this pause due to recent priority play
     } else {
@@ -541,11 +523,7 @@ Instance.prototype.destroy = function () {
   this._destroyFns.length = 0;
   // Release container claim if we owned it so a new first descendant may claim later
   if (this._containerBound && this._containerOwns) {
-    try {
-      this._CONTAINER_CLAIMS.delete(this._containerBound);
-    } catch (e) {
-      logError("container claim release failed", e);
-    }
+    this._CONTAINER_CLAIMS.delete(this._containerBound);
   }
   log("[video] detached");
 };
