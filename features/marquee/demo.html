@@ -217,35 +217,37 @@
   </header>
 
   <section id="basic">
-    <h2>01. Basic marquee</h2>
+    <h2>01. Basic marquee — LARGE TEST FOR JUMPS</h2>
     <p>
-      A default marquee uses <code>data-marquee</code> and scrolls at 1px per frame. Speed is consistent no matter the
-      container width.
+      Watch the loop restart boundary carefully. Any visible jump indicates precision or measurement issues.
     </p>
-    <div class="marquee-box" data-marquee>
-      <div class="marquee-content">
-        <span class="chip">Design tokens</span>
-        <span class="chip">Composable APIs</span>
-        <span class="chip">Zero legacy fallbacks</span>
-        <span class="chip">Idempotent init()</span>
+    <div class="marquee-box" data-marquee data-marquee-speed="3" style="font-size: 3rem; padding: 3rem 2rem; height: 200px;">
+      <div class="marquee-content" style="gap: 4rem;">
+        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #ef4444, #dc2626); color: white; font-weight: 800;">★ WATCH FOR JUMPS ★</span>
+        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; font-weight: 800;">⚡ SEAMLESS LOOP ⚡</span>
+        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #10b981, #059669); color: white; font-weight: 800;">✓ NO DISCONTINUITY ✓</span>
+        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; font-weight: 800;">→ INFINITE SCROLL →</span>
       </div>
     </div>
   </section>
 
   <section id="speeds">
-    <h2>02. Tuned speeds</h2>
-    <p>Speed is declared via <code>data-marquee-speed</code> in pixels per frame (at 60fps).</p>
+    <h2>02. High contrast jump detector</h2>
+    <p>High speed + bold stripes make any loop discontinuity obvious. Watch for sudden position shifts.</p>
     <div class="stacked">
-      <div class="marquee-box" data-marquee data-marquee-speed="0.5">
-        <div class="marquee-content">
-          <span class="chip">Slow: 0.5</span>
-          <span class="chip">Perfect for subtle UI surfaces</span>
+      <div class="marquee-box" data-marquee data-marquee-speed="4" style="background: #000; padding: 2.5rem;">
+        <div class="marquee-content" style="gap: 3rem;">
+          <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #fff; color: #000; font-weight: 900;">▮▮▮ BLACK ▮▮▮</span>
+          <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #ff0000; color: #fff; font-weight: 900;">▮▮▮ RED ▮▮▮</span>
+          <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #00ff00; color: #000; font-weight: 900;">▮▮▮ GREEN ▮▮▮</span>
+          <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #0000ff; color: #fff; font-weight: 900;">▮▮▮ BLUE ▮▮▮</span>
         </div>
       </div>
-      <div class="marquee-box" data-marquee data-marquee-speed="2.75">
-        <div class="marquee-content">
-          <span class="chip">Fast: 2.75</span>
-          <span class="chip">Smooth even with long copy</span>
+      <div class="marquee-box" data-marquee data-marquee-speed="5" data-marquee-gap="80" style="background: linear-gradient(90deg, #1e293b 0%, #334155 100%); padding: 3rem;">
+        <div class="marquee-content" style="gap: 5rem;">
+          <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #fbbf24; color: #000; font-weight: 900; box-shadow: 0 0 30px #fbbf24;">GAP TEST</span>
+          <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #a78bfa; color: #fff; font-weight: 900; box-shadow: 0 0 30px #a78bfa;">LARGE GAP</span>
+          <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #34d399; color: #000; font-weight: 900; box-shadow: 0 0 30px #34d399;">80PX GAP</span>
         </div>
       </div>
     </div>

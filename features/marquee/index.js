@@ -47,20 +47,33 @@ function removeClones(state) {
 function addClones(state) {
   if (!state.originals.length) return;
   const containerW = state.container.clientWidth || 0;
-  // Ensure coverage: container width plus at least one extra cycle for seamless wrapping.
-  let needed = Math.ceil((containerW + (state.loopWidth || 0)) / (state.loopWidth || 1)) + 1;
-  if (!Number.isFinite(needed) || needed < 1) needed = 3; // Fallback in non-layout environments
-  const frag = document.createDocumentFragment();
-
+  // Generate enough clones to cover viewport + buffer cycles
+  let needed = Math.ceil((containerW / (state.loopWidth || 1))) + 2;
+  if (!Number.isFinite(needed) || needed < 3) needed = 3;
+  
+  const fragBefore = document.createDocumentFragment();
+  const fragAfter = document.createDocumentFragment();
+  
+  // Add one set of clones BEFORE originals to prevent left-side disappearance
+  for (const node of state.originals) {
+    const clone = node.cloneNode(true);
+    cleanClone(clone);
+    fragBefore.append(clone);
+    state.clones.push(clone);
+  }
+  
+  // Add multiple sets AFTER originals for scrolling
   for (let i = 0; i < needed; i++) {
     for (const node of state.originals) {
       const clone = node.cloneNode(true);
       cleanClone(clone);
-      frag.append(clone);
+      fragAfter.append(clone);
       state.clones.push(clone);
     }
   }
-  state.wrapper.append(frag);
+  
+  state.wrapper.prepend(fragBefore);
+  state.wrapper.append(fragAfter);
 }
 
 function refresh(state) {
@@ -83,10 +96,15 @@ function refresh(state) {
   state.loopWidth = state.wrapper.scrollWidth + gap;
   state.speed = readSpeed(state.container);
   state.pixelsPerMs = (state.speed * 60) / 1000;
-  state.offset = progress * state.loopWidth;
+  
+  // Normalize progress to avoid jumps during refresh
+  const normalizedProgress = progress - Math.floor(progress);
+  // Start offset at loopWidth (past the prepended clones, at the originals position)
+  state.offset = normalizedProgress * state.loopWidth + state.loopWidth;
 
   addClones(state);
-  state.wrapper.style.transform = `translate3d(-${state.offset}px,0,0)`;
+  const roundedOffset = Math.round(state.offset);
+  state.wrapper.style.transform = `translate3d(${-roundedOffset}px,0,0)`;
 }
 
 function startAnimation(state) {
@@ -118,11 +136,15 @@ function startAnimation(state) {
     }
 
     state.offset += state.pixelsPerMs * delta;
-    if (state.offset >= state.loopWidth) {
-      state.offset %= state.loopWidth;
+    
+    // Wrap when offset exceeds 2*loopWidth (we start at loopWidth, so we wrap back to loopWidth)
+    while (state.offset >= state.loopWidth * 2) {
+      state.offset -= state.loopWidth;
     }
 
-    state.wrapper.style.transform = `translate3d(-${state.offset}px,0,0)`;
+    // Round to nearest pixel to prevent sub-pixel jitter
+    const roundedOffset = Math.round(state.offset);
+    state.wrapper.style.transform = `translate3d(${-roundedOffset}px,0,0)`;
     const raf = (typeof window !== "undefined" && window.requestAnimationFrame) ? window.requestAnimationFrame.bind(window) : (cb) => setTimeout(() => cb(Date.now()), 0);
     state.animationId = raf(step);
   };
@@ -160,7 +182,7 @@ function scheduleRefresh(state) {
 function createInstance(container) {
   const wrapper = document.createElement("div");
   wrapper.style.cssText =
-    "display:flex;white-space:nowrap;will-change:transform;grid-area:1/1;width:max-content;overflow:visible;flex-shrink:0;contain:layout style;pointer-events:none";
+    "display:flex;white-space:nowrap;transform:translateZ(0);backface-visibility:hidden;perspective:1000px;will-change:transform;grid-area:1/1;width:max-content;overflow:visible;flex-shrink:0;contain:layout style;pointer-events:none";
 
   const originals = Array.from(container.childNodes);
   for (const node of originals) wrapper.append(node);
@@ -208,7 +230,7 @@ function createInstance(container) {
   container.style.display = "grid";
   container.style.gridTemplateColumns = "100%";
   container.style.contain = "layout style paint";
-  container.style.pointerEvents = "none";
+  container.style.transform = "translateZ(0)"; // Force GPU acceleration on container
   container.append(wrapper);
 
   // Remeasure on font load and image load events
