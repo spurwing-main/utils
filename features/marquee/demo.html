@@ -3,216 +3,499 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Marquee Feature Demo</title>
   <style>
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      max-width: 800px;
-      margin: 2rem auto;
-      padding: 0 1rem;
+    :root {
+      color-scheme: light;
+      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    .marquee-container {
+    body {
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+      max-width: 960px;
+      line-height: 1.55;
+      background: #f7f7f8;
+      color: #1f2933;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin-top: 2.5rem;
+      line-height: 1.2;
+    }
+
+    section {
+      margin-top: 2rem;
+      padding: 1.5rem;
+      border-radius: 12px;
+      background: white;
+      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.06);
+    }
+
+    p {
+      margin-block: 0.75rem;
+    }
+
+    .marquee-box {
+      position: relative;
+      margin-top: 1rem;
+      border-radius: 10px;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(16, 185, 129, 0.08));
+      padding: 1.25rem;
       overflow: hidden;
-      border: 2px solid #ccc;
-      padding: 1rem;
-      margin: 1rem 0;
-      background: #f5f5f5;
     }
 
     .marquee-content {
       display: inline-flex;
-      gap: 2rem;
+      gap: 1.75rem;
+      align-items: center;
       white-space: nowrap;
+      font-weight: 600;
+      letter-spacing: 0.01em;
     }
 
-    .marquee-item {
-      padding: 0.5rem 1rem;
-      background: white;
-      border-radius: 4px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.08);
+      backdrop-filter: blur(4px);
+      font-weight: 500;
+    }
+
+    .chip svg {
+      width: 1rem;
+      height: 1rem;
+      color: #0f172a;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    .range-label {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 600;
+    }
+
+    .range-label input[type='range'] {
+      width: 220px;
     }
 
     button {
-      margin: 0.5rem 0.5rem 0.5rem 0;
-      padding: 0.5rem 1rem;
-      background: #007bff;
-      color: white;
+      appearance: none;
       border: none;
-      border-radius: 4px;
+      border-radius: 999px;
+      padding: 0.65rem 1.2rem;
+      font-size: 0.95rem;
+      font-weight: 600;
       cursor: pointer;
+      background: #2563eb;
+      color: white;
+      transition: transform 150ms ease, background 150ms ease, box-shadow 150ms ease;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.25);
     }
 
     button:hover {
-      background: #0056b3;
+      transform: translateY(-1px);
+      background: #1d4ed8;
+    }
+
+    button.secondary {
+      background: #334155;
+      box-shadow: 0 10px 24px rgba(51, 65, 85, 0.25);
     }
 
     button.danger {
-      background: #dc3545;
+      background: #dc2626;
+      box-shadow: 0 10px 24px rgba(220, 38, 38, 0.25);
     }
 
-    button.danger:hover {
-      background: #c82333;
+    button.ghost {
+      background: rgba(15, 23, 42, 0.08);
+      color: #0f172a;
+      box-shadow: none;
     }
 
     code {
-      background: #f0f0f0;
+      font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+        "Courier New", monospace;
+      background: rgba(15, 23, 42, 0.08);
+      border-radius: 6px;
       padding: 0.2rem 0.4rem;
-      border-radius: 3px;
-      font-size: 0.9em;
+      font-size: 0.95rem;
+    }
+
+    ul.demo-list {
+      display: grid;
+      gap: 0.5rem;
+      padding-left: 1.5rem;
+    }
+
+    .log {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.04);
+      font-family: "JetBrains Mono", monospace;
+      max-height: 220px;
+      overflow: auto;
+    }
+
+    .log li {
+      list-style: none;
+      padding: 0.15rem 0;
+    }
+
+    .stacked {
+      display: grid;
+      gap: 1.25rem;
+    }
+
+    .marquee-box button,
+    .marquee-box a {
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      background: rgba(255, 255, 255, 0.8);
+      color: #0f172a;
+      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18);
+      text-decoration: none;
+    }
+
+    .responsive-box {
+      transition: max-width 160ms ease;
+    }
+
+    .marquee-box a:hover {
+      background: rgba(241, 245, 249, 0.95);
+    }
+
+    .marquee-box button {
+      cursor: pointer;
+      border: none;
+    }
+
+    @media (max-width: 720px) {
+      body {
+        padding-inline: 1rem;
+      }
+
+      section {
+        padding: 1.15rem;
+      }
+
+      .controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      button {
+        width: 100%;
+      }
     }
   </style>
 </head>
 
 <body>
-  <h1>Marquee Feature Demo</h1>
+  <header>
+    <h1>Marquee Feature Demo</h1>
+    <p>
+      This page exercises every part of the marquee runtime. Open your devtools console to watch debug logs emitted by the
+      loader (<code>data-debug="marquee"</code>). Each section below highlights a specific use case or edge case.
+    </p>
+  </header>
 
-  <p>This demonstrates the marquee feature - a standalone smooth scrolling animation module using declarative
-    attributes.</p>
-
-  <h2>Basic Marquee (default speed: 1px/frame)</h2>
-  <div class="marquee-container" data-marquee>
-    <div class="marquee-content">
-      <span class="marquee-item">Item 1</span>
-      <span class="marquee-item">Item 2</span>
-      <span class="marquee-item">Item 3</span>
-      <span class="marquee-item">Item 4</span>
+  <section id="basic">
+    <h2>01. Basic marquee</h2>
+    <p>
+      A default marquee uses <code>data-marquee</code> and scrolls at 1px per frame. Speed is consistent no matter the
+      container width.
+    </p>
+    <div class="marquee-box" data-marquee>
+      <div class="marquee-content">
+        <span class="chip">Design tokens</span>
+        <span class="chip">Composable APIs</span>
+        <span class="chip">Zero legacy fallbacks</span>
+        <span class="chip">Idempotent init()</span>
+      </div>
     </div>
-  </div>
-  <p><em>Automatically started by init(). Speed: <code>data-marquee-speed="1"</code> (default)</em></p>
+  </section>
 
-  <h2>Fast Marquee (3px/frame)</h2>
-  <div class="marquee-container" data-marquee data-marquee-speed="3">
-    <div class="marquee-content">
-      <span class="marquee-item">Fast Item 1</span>
-      <span class="marquee-item">Fast Item 2</span>
-      <span class="marquee-item">Fast Item 3</span>
+  <section id="speeds">
+    <h2>02. Tuned speeds</h2>
+    <p>Speed is declared via <code>data-marquee-speed</code> in pixels per frame (at 60fps).</p>
+    <div class="stacked">
+      <div class="marquee-box" data-marquee data-marquee-speed="0.5">
+        <div class="marquee-content">
+          <span class="chip">Slow: 0.5</span>
+          <span class="chip">Perfect for subtle UI surfaces</span>
+        </div>
+      </div>
+      <div class="marquee-box" data-marquee data-marquee-speed="2.75">
+        <div class="marquee-content">
+          <span class="chip">Fast: 2.75</span>
+          <span class="chip">Smooth even with long copy</span>
+        </div>
+      </div>
     </div>
-  </div>
-  <p><em>Speed: <code>data-marquee-speed="3"</code></em></p>
+  </section>
 
-  <h2>Slow Marquee (0.5px/frame)</h2>
-  <div class="marquee-container" data-marquee data-marquee-speed="0.5">
-    <div class="marquee-content">
-      <span class="marquee-item">Slow Item 1</span>
-      <span class="marquee-item">Slow Item 2</span>
-      <span class="marquee-item">Slow Item 3</span>
+  <section id="interactive">
+    <h2>03. Interactive content</h2>
+    <p>
+      Focusable children remain interactive in the original DOM. Cloned nodes are hidden from assistive tech and cannot
+      capture focus.
+    </p>
+    <div class="marquee-box" data-marquee data-marquee-speed="1.35">
+      <div class="marquee-content">
+        <a href="https://github.com/spurwing-main/utils" target="_blank" rel="noreferrer">View source</a>
+        <button type="button">Trigger CTA</button>
+        <a href="https://biomejs.dev/" target="_blank" rel="noreferrer">Biome powered</a>
+        <button type="button">Safe cleanup</button>
+      </div>
     </div>
-  </div>
-  <p><em>Speed: <code>data-marquee-speed="0.5"</code></em></p>
+  </section>
 
-  <h2>Dynamic Marquee</h2>
-  <div id="dynamic-container"></div>
-  <button onclick="addMarquee()">Add Marquee</button>
-  <button class="danger" onclick="removeMarquee()">Remove Marquee</button>
+  <section id="dynamic">
+    <h2>04. Dynamic marquees</h2>
+    <p>
+      Add or remove marquees at runtime. The feature exposes <code>Marquee.rescan()</code> to discover new nodes, while
+      attribute tweaks are instant.
+    </p>
+    <div class="controls">
+      <button type="button" data-action="add">Add marquee</button>
+      <button type="button" class="secondary" data-action="speed">Toggle speed (1 ⟷ 2.4)</button>
+      <button type="button" class="danger" data-action="remove">Remove marquee</button>
+    </div>
+    <div id="dynamic-zone" class="stacked" aria-live="polite" aria-label="Dynamic marquee area"></div>
+  </section>
 
-  <h2>How It Works</h2>
-  <ul>
-    <li><strong>Attribute-Based:</strong> Add <code>data-marquee</code> to any element to enable marquee</li>
-    <li><strong>Speed Control:</strong> Use <code>data-marquee-speed</code> for custom speed (pixels per frame at 60fps)
-    </li>
-    <li><strong>Automatic Discovery:</strong> <code>init()</code> finds all marquees on load</li>
-    <li><strong>Dynamic Updates:</strong> Call <code>Marquee.rescan()</code> after adding/removing elements</li>
-    <li><strong>Consistent Speed:</strong> Same speed value = same visual speed across all marquees</li>
-  </ul>
+  <section id="scoped">
+    <h2>05. Scoped rescans</h2>
+    <p>
+      Rescanning a specific subtree only touches marquees in that region. Others remain untouched.
+    </p>
+    <div class="controls">
+      <button type="button" data-action="scoped-toggle">Toggle left marquee</button>
+      <button type="button" class="secondary" data-action="scoped-rescan">Rescan scoped region</button>
+    </div>
+    <div id="scoped-root" class="stacked" aria-live="polite">
+      <div class="marquee-box" data-marquee data-marquee-speed="1.1" data-scope="primary">
+        <div class="marquee-content">
+          <span class="chip">Scoped marquee A</span>
+          <span class="chip">Will detach when toggled off</span>
+        </div>
+      </div>
+      <div class="marquee-box" data-marquee data-marquee-speed="1.8">
+        <div class="marquee-content">
+          <span class="chip">Scoped marquee B</span>
+          <span class="chip">Always stays running</span>
+        </div>
+      </div>
+    </div>
+  </section>
 
-  <h2>Features</h2>
-  <ul>
-    <li>Seamless looping without visible jumps</li>
-    <li>Respects <code>prefers-reduced-motion</code> user preference</li>
-    <li>Adaptive to container size changes</li>
-    <li>Clean DOM restoration on detach</li>
-    <li>No globals, no framework dependencies</li>
-  </ul>
+  <section id="responsive">
+    <h2>06. Responsive sizing</h2>
+    <p>
+      Drag the slider to shrink or expand the marquee container. The runtime skips tiny jitter but remeasures on real width
+      changes and dramatic height shifts.
+    </p>
+    <div class="controls">
+      <label class="range-label">
+        Width
+        <input type="range" min="240" max="720" value="480" data-action="resize-range" aria-label="Responsive marquee width" />
+      </label>
+      <button type="button" class="ghost" data-action="resize-reset">Reset width</button>
+    </div>
+    <div class="marquee-box responsive-box" data-marquee data-marquee-speed="1.6" style="max-width: 480px;">
+      <div class="marquee-content">
+        <span class="chip">Resize-aware marquee</span>
+        <span class="chip">Only meaningful width deltas</span>
+        <span class="chip">Large height shifts refresh too</span>
+      </div>
+    </div>
+  </section>
 
-  <h2>Using the global window.Marquee API</h2>
-  <p>The loader exposes a global <code>window.Marquee</code> object after initialization. You can call it directly
-    without importing:</p>
-  <div>
-    <button onclick="globalRescan()">Rescan (window.Marquee.rescan)</button>
-    <button onclick="globalDetachFirst()">Detach first marquee</button>
-    <button onclick="globalAttachFirst()">Attach first marquee</button>
-  </div>
-  <div id="log" style="margin-top:0.5rem;font-family:monospace;color:#333;"></div>
+  <section id="api">
+    <h2>07. Global API helpers</h2>
+    <p>
+      The loader exposes <code>window.Marquee</code>. Use it directly without imports once the feature initialises.</p>
+    <div class="controls">
+      <button type="button" class="ghost" data-action="rescan-global">Rescan document</button>
+      <button type="button" class="ghost" data-action="detach-first">Detach first marquee</button>
+      <button type="button" class="ghost" data-action="attach-first">Attach first marquee</button>
+    </div>
+    <ol class="log" id="log" aria-live="polite"></ol>
+  </section>
 
-  <!-- Load marquee feature via loader -->
+  <footer>
+    <h3>Notes</h3>
+    <ul class="demo-list">
+      <li>The feature honours <code>prefers-reduced-motion</code> &mdash; toggle it in your OS to see animations stop.</li>
+      <li>Every marquee is idempotent: repeated attaches simply refresh measurements and speed.</li>
+      <li>No legacy fallbacks or timers are used. `ResizeObserver` handles measurement updates.</li>
+    </ul>
+  </footer>
+
   <script type="module" src="../../loader.js" data-features="marquee" data-debug="marquee"></script>
-
   <script type="module">
     import { Marquee } from './index.js';
 
-    let dynamicMarquee = null;
+    const logList = document.getElementById('log');
+    const writeLog = (message) => {
+      if (!logList) return;
+      const item = document.createElement('li');
+      const stamp = new Date().toLocaleTimeString();
+      item.textContent = `[${stamp}] ${message}`;
+      logList.prepend(item);
+      while (logList.childElementCount > 12) {
+        logList.removeChild(logList.lastElementChild);
+      }
+    };
 
-    window.addMarquee = () => {
-      if (dynamicMarquee) return;
+    const dynamicZone = document.getElementById('dynamic-zone');
+    let dynamicContainer = null;
+    const dynamicSpeeds = [1, 2.4];
+    let dynamicSpeedIndex = 0;
 
-      const container = document.getElementById('dynamic-container');
-      dynamicMarquee = document.createElement('div');
-      dynamicMarquee.className = 'marquee-container';
-      dynamicMarquee.setAttribute('data-marquee', '');
-      dynamicMarquee.setAttribute('data-marquee-speed', '2');
-      dynamicMarquee.innerHTML = `
-        <div class="marquee-content">
-          <span class="marquee-item">Dynamic 1</span>
-          <span class="marquee-item">Dynamic 2</span>
-          <span class="marquee-item">Dynamic 3</span>
-        </div>
-      `;
-      container.appendChild(dynamicMarquee);
+    const buildDynamicMarquee = () => {
+      const container = document.createElement('div');
+      container.className = 'marquee-box';
+      container.dataset.marquee = '';
+      container.dataset.marqueeSpeed = String(dynamicSpeeds[dynamicSpeedIndex]);
 
-      // Rescan to discover new marquee
+      const content = document.createElement('div');
+      content.className = 'marquee-content';
+      content.append(
+        createChip('Runtime marquee'),
+        createChip(`Speed: ${dynamicSpeeds[dynamicSpeedIndex]}px/frame`),
+        createChip('Added via JS'),
+      );
+
+      container.append(content);
+      return container;
+    };
+
+    function createChip(label) {
+      const span = document.createElement('span');
+      span.className = 'chip';
+      span.textContent = label;
+      return span;
+    }
+
+    const addBtn = document.querySelector('[data-action="add"]');
+    const speedBtn = document.querySelector('[data-action="speed"]');
+    const removeBtn = document.querySelector('[data-action="remove"]');
+
+    addBtn?.addEventListener('click', () => {
+      if (dynamicContainer) return;
+      dynamicContainer = buildDynamicMarquee();
+      dynamicZone?.append(dynamicContainer);
       Marquee.rescan();
-    };
+      writeLog('Added dynamic marquee');
+    });
 
-    window.removeMarquee = () => {
-      if (!dynamicMarquee) return;
+    speedBtn?.addEventListener('click', () => {
+      if (!dynamicContainer) return;
+      dynamicSpeedIndex = (dynamicSpeedIndex + 1) % dynamicSpeeds.length;
+      dynamicContainer.dataset.marqueeSpeed = String(dynamicSpeeds[dynamicSpeedIndex]);
+      writeLog(`Updated dynamic marquee speed → ${dynamicContainer.dataset.marqueeSpeed}`);
+    });
 
-      // Remove attribute first so rescan will detach it
-      dynamicMarquee.removeAttribute('data-marquee');
+    removeBtn?.addEventListener('click', () => {
+      if (!dynamicContainer) return;
+      dynamicContainer.removeAttribute('data-marquee');
+      dynamicContainer.remove();
+      dynamicContainer = null;
+      writeLog('Removed dynamic marquee');
+    });
 
-      // Rescan to detach
-      Marquee.rescan();
+    const scopedRoot = document.getElementById('scoped-root');
+    const scopedToggleBtn = document.querySelector('[data-action="scoped-toggle"]');
+    const scopedRescanBtn = document.querySelector('[data-action="scoped-rescan"]');
 
-      // Remove from DOM
-      dynamicMarquee.remove();
-      dynamicMarquee = null;
-    };
+    scopedToggleBtn?.addEventListener('click', () => {
+      const target = scopedRoot?.querySelector('[data-scope="primary"]');
+      if (!target) return;
+      if (target.hasAttribute('data-marquee')) {
+        target.removeAttribute('data-marquee');
+        writeLog('Scoped marquee A → attribute removed');
+      } else {
+        target.setAttribute('data-marquee', '');
+        writeLog('Scoped marquee A → attribute restored');
+      }
+    });
 
-    // --- Global window.Marquee usage helpers ---
-    const logEl = document.getElementById('log');
-    const log = (...args) => {
-      if (!logEl) return;
-      const line = document.createElement('div');
-      line.textContent = args.map(String).join(' ');
-      logEl.prepend(line);
-    };
+    const responsiveBox = document.querySelector('.responsive-box');
+    const resizeRange = document.querySelector('[data-action="resize-range"]');
+    const resizeResetBtn = document.querySelector('[data-action="resize-reset"]');
+    const defaultResponsiveWidth = 480;
 
-    window.globalRescan = () => {
+    resizeRange?.addEventListener('input', (event) => {
+      if (!responsiveBox) return;
+      const nextValue = Number.parseInt(event.target.value, 10);
+      responsiveBox.style.maxWidth = `${nextValue}px`;
+    });
+
+    resizeRange?.addEventListener('change', (event) => {
+      const nextValue = Number.parseInt(event.target.value, 10);
+      if (!Number.isFinite(nextValue)) return;
+      writeLog(`Responsive marquee width → ${nextValue}px`);
+    });
+
+    resizeResetBtn?.addEventListener('click', () => {
+      if (!responsiveBox || !resizeRange) return;
+      responsiveBox.style.maxWidth = `${defaultResponsiveWidth}px`;
+      resizeRange.value = String(defaultResponsiveWidth);
+      writeLog('Responsive marquee width reset');
+    });
+
+    scopedRescanBtn?.addEventListener('click', () => {
+      if (!scopedRoot) return;
+      Marquee.rescan(scopedRoot);
+      writeLog('Scoped rescan executed');
+    });
+
+    const rescanGlobal = document.querySelector('[data-action="rescan-global"]');
+    const detachFirst = document.querySelector('[data-action="detach-first"]');
+    const attachFirst = document.querySelector('[data-action="attach-first"]');
+
+    rescanGlobal?.addEventListener('click', () => {
       window.Marquee?.rescan();
-      log('Called window.Marquee.rescan()');
-    };
+      writeLog('window.Marquee.rescan()');
+    });
 
-    window.globalDetachFirst = () => {
+    detachFirst?.addEventListener('click', () => {
       const first = document.querySelector('[data-marquee]');
       if (!first) {
-        log('No marquee element found to detach');
+        writeLog('No marquee to detach');
         return;
       }
       window.Marquee?.detach(first);
-      log('Detached first marquee element');
-    };
+      writeLog('window.Marquee.detach(first marquee)');
+    });
 
-    window.globalAttachFirst = () => {
-      // Re-attach the first element that has the attribute
-      const first = document.querySelector('[data-marquee]');
+    attachFirst?.addEventListener('click', () => {
+      const first = document.querySelector('[data-marquee]') ?? document.querySelector('.marquee-box');
       if (!first) {
-        log('No marquee element with attribute present to attach');
+        writeLog('No marquee element found');
         return;
       }
       window.Marquee?.attach(first);
-      log('Attached first marquee element');
-    };
+      writeLog('window.Marquee.attach(first marquee)');
+    });
   </script>
 </body>
 
