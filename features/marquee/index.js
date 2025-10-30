@@ -155,6 +155,10 @@ function refresh(state) {
 
   removeClones(state);
 
+  // Preserve relative progress across width changes to avoid visible jumps
+  const prevLoop = state.loopWidth > 0 ? state.loopWidth : MIN_WIDTH;
+  const progress = Math.max(0, Math.min(1, state.offset / prevLoop));
+
   let contentWidth = state.wrapper.scrollWidth;
   const view = state.container.ownerDocument?.defaultView;
 
@@ -192,6 +196,8 @@ function refresh(state) {
     debug?.warn("Invalid offset detected, resetting to 0", { offset: state.offset });
     state.offset = 0;
   } else {
+    // Recompute offset from preserved progress to keep continuity when width changes
+    state.offset = progress * state.loopWidth;
     const remainder = state.offset % state.loopWidth;
     state.offset = remainder <= LOOP_WRAP_EPSILON ? 0 : remainder;
   }
@@ -229,6 +235,17 @@ function stopAnimation(state) {
 }
 
 function startAnimation(state) {
+  // Guard against invalid/too-small measurements to avoid jitter loops
+  if (!Number.isFinite(state.loopWidth) || state.loopWidth <= MIN_WIDTH + 0.5) {
+    debug?.info("Animation deferred due to minimal loop width", {
+      loopWidth: state.loopWidth,
+    });
+    stopAnimation(state);
+    state.offset = 0;
+    state.wrapper.style.transform = "translate3d(0,0,0)";
+    return;
+  }
+
   if (state.reducedMotion) {
     debug?.info("Animation disabled due to prefers-reduced-motion");
     stopAnimation(state);
@@ -287,8 +304,8 @@ function startAnimation(state) {
       state.offset = 0;
     }
 
-    const roundedOffset = Math.round(state.offset * SUBPIXEL_PRECISION) / SUBPIXEL_PRECISION;
-    state.wrapper.style.transform = `translate3d(-${roundedOffset}px,0,0)`;
+  const roundedOffset = Math.round(state.offset * SUBPIXEL_PRECISION) / SUBPIXEL_PRECISION;
+  state.wrapper.style.transform = `translate3d(-${roundedOffset}px,0,0)`;
     state.animationId = state.requestAnimationFrame(step);
   };
 
