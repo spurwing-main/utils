@@ -133,6 +133,23 @@ Sets the animation speed in pixels per frame at 60fps. Higher values = faster sc
 <div data-marquee data-marquee-speed="3">Fast content</div>
 ```
 
+### `data-marquee-gap`
+
+Optional cycle gap in pixels between repeated content cycles. When not set, the marquee inherits the computed `gap`/`column-gap` from the marquee container. Set this attribute when you need an explicit, class‑free gap.
+
+```html
+<!-- Explicit 24px gap between cycles -->
+<div data-marquee data-marquee-gap="24">
+  <span>Item A</span>
+  <span>Item B</span>
+  <span>Item C</span>
+  <!-- Repeated cycles will be separated by 24px -->
+  <!-- The internal spacing between Item A/B/C should be handled by your own markup/styles. -->
+  <!-- The marquee only controls the gap between cycles. -->
+  
+</div>
+```
+
 ## Speed Calculation
 
 Speed is measured in pixels per frame at 60fps:
