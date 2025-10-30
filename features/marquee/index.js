@@ -333,8 +333,10 @@ function createInstance(container) {
     "white-space:nowrap",
     "will-change:transform",
     "grid-area:1/1",
-    "min-width:0",
+    "width:0",
+    "min-width:100%",
     "max-width:100%",
+    "overflow:visible",
     "flex-shrink:0",
     "contain:layout style",
   ].join(";");
