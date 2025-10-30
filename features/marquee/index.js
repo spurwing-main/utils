@@ -154,7 +154,7 @@ function refresh(state) {
     const computed = view.getComputedStyle(state.wrapper);
     const gap = computed.gap || computed.columnGap;
     if (gap && gap !== "normal" && gap !== "0px") {
-      const gapValue = parseFloat(gap);
+      const gapValue = Number.parseFloat(gap);
       if (Number.isFinite(gapValue) && gapValue > 0) {
         contentWidth += gapValue;
         debug?.info(`Added trailing gap: ${gapValue}px`, {
