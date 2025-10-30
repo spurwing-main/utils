@@ -11,9 +11,8 @@ const WIDTH_EPSILON = 1;
 const HEIGHT_RATIO_THRESHOLD = 0.25;
 const CLONE_SAFETY_MARGIN = 2;
 const MAX_CLONE_ITERATIONS = 100;
-const SUBPIXEL_PRECISION = 100;
-const FOCUSABLE_SELECTOR =
-  "a[href],area[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
+const SUBPIXEL_PRECISION = 1000;
+const LOOP_WRAP_EPSILON = 2; // px threshold to snap to 0 at loop
 
 const instances = new Map();
 
@@ -44,25 +43,34 @@ function sanitiseClone(node) {
   if (node?.nodeType !== 1) return;
   const element = node;
   element.setAttribute("data-marquee-clone", "true");
-  element.setAttribute("aria-hidden", "true");
+  // Keep clones strictly visual; no IDs that could duplicate
   element.removeAttribute("id");
+}
 
-  if ("inert" in element) {
-    try {
-      element.inert = true;
-    } catch (error) {
-      debug?.warn("unable to apply inert to clone", error);
-    }
-  }
+function readGapPx(element) {
+  if (!element || !element.ownerDocument) return 0;
+  const view = element.ownerDocument.defaultView;
+  if (!view?.getComputedStyle) return 0;
+  const computed = view.getComputedStyle(element);
+  // Prefer column-gap for horizontal marquees; fallback to gap shorthand
+  const raw = computed.columnGap && computed.columnGap !== "normal" ? computed.columnGap : computed.gap;
+  if (!raw || raw === "normal" || raw === "0px") return 0;
+  const value = Number.parseFloat(raw);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
 
-  if (element.matches(FOCUSABLE_SELECTOR)) {
-    element.setAttribute("tabindex", "-1");
+function findGapElement(container) {
+  if (!container?.querySelector) return null;
+  // Prefer explicit class hooks first
+  let el = container.querySelector(".marquee_content-list");
+  if (!el) el = container.querySelector(".marquee-content");
+  if (el) return el;
+  // Fallback: first descendant element with a non-zero computed gap
+  const candidates = container.querySelectorAll("*:not([data-marquee-clone])");
+  for (const node of candidates) {
+    if (readGapPx(node) > 0) return node;
   }
-
-  for (const focusable of element.querySelectorAll(FOCUSABLE_SELECTOR)) {
-    focusable.setAttribute("tabindex", "-1");
-    focusable.setAttribute("aria-hidden", "true");
-  }
+  return null;
 }
 
 function removeClones(state) {
@@ -151,17 +159,20 @@ function refresh(state) {
   const view = state.container.ownerDocument?.defaultView;
 
   if (view) {
-    const computed = view.getComputedStyle(state.wrapper);
-    const gap = computed.gap || computed.columnGap;
-    if (gap && gap !== "normal" && gap !== "0px") {
-      const gapValue = Number.parseFloat(gap);
-      if (Number.isFinite(gapValue) && gapValue > 0) {
-        contentWidth += gapValue;
-        debug?.info(`Added trailing gap: ${gapValue}px`, {
-          originalWidth: state.wrapper.scrollWidth,
-          withGap: contentWidth,
-        });
-      }
+    const sourceEl = state.gapElement || state.wrapper;
+    const gapValue = readGapPx(sourceEl) || readGapPx(state.wrapper);
+    if (gapValue > 0) {
+      // Keep wrapper spacing in sync with source so clones are spaced correctly
+      state.wrapper.style.columnGap = `${gapValue}px`;
+      state.wrapper.style.gap = `${gapValue}px`;
+      contentWidth += gapValue;
+      debug?.info(`Added trailing gap: ${gapValue}px`, {
+        originalWidth: state.wrapper.scrollWidth,
+        withGap: contentWidth,
+      });
+    } else {
+      state.wrapper.style.columnGap = "";
+      state.wrapper.style.gap = "";
     }
   }
 
@@ -181,7 +192,8 @@ function refresh(state) {
     debug?.warn("Invalid offset detected, resetting to 0", { offset: state.offset });
     state.offset = 0;
   } else {
-    state.offset %= state.loopWidth;
+    const remainder = state.offset % state.loopWidth;
+    state.offset = remainder <= LOOP_WRAP_EPSILON ? 0 : remainder;
   }
 
   addClones(state);
@@ -221,7 +233,7 @@ function startAnimation(state) {
     debug?.info("Animation disabled due to prefers-reduced-motion");
     stopAnimation(state);
     state.offset = 0;
-    state.wrapper.style.transform = "translateX(0)";
+    state.wrapper.style.transform = "translate3d(0,0,0)";
     return;
   }
 
@@ -262,7 +274,8 @@ function startAnimation(state) {
     state.offset += state.pixelsPerMs * delta;
 
     if (state.offset >= state.loopWidth) {
-      state.offset %= state.loopWidth;
+      const remainder = state.offset % state.loopWidth;
+      state.offset = remainder <= LOOP_WRAP_EPSILON ? 0 : remainder;
       debug?.info("Loop point reached", {
         newOffset: state.offset.toFixed(2),
         loopWidth: state.loopWidth.toFixed(2),
@@ -275,7 +288,7 @@ function startAnimation(state) {
     }
 
     const roundedOffset = Math.round(state.offset * SUBPIXEL_PRECISION) / SUBPIXEL_PRECISION;
-    state.wrapper.style.transform = `translateX(-${roundedOffset}px)`;
+    state.wrapper.style.transform = `translate3d(-${roundedOffset}px,0,0)`;
     state.animationId = state.requestAnimationFrame(step);
   };
 
@@ -324,8 +337,8 @@ function createInstance(container) {
     container: container.id || container.className || "unnamed",
   });
 
-  const computed = view.getComputedStyle(container);
-  const originalColumnGap = computed.columnGap;
+  const gapElement = findGapElement(container);
+  const initialGapPx = readGapPx(gapElement) || 0;
 
   const wrapper = doc.createElement("div");
   wrapper.style.cssText = [
@@ -341,9 +354,10 @@ function createInstance(container) {
     "contain:layout style",
   ].join(";");
 
-  if (originalColumnGap && originalColumnGap !== "normal") {
-    wrapper.style.columnGap = originalColumnGap;
-    wrapper.style.gap = originalColumnGap;
+  if (initialGapPx > 0) {
+    // Apply the measured gap to wrapper so clones are spaced consistently
+    wrapper.style.columnGap = `${initialGapPx}px`;
+    wrapper.style.gap = `${initialGapPx}px`;
   }
 
   const originals = Array.from(container.childNodes);
@@ -365,8 +379,11 @@ function createInstance(container) {
   container.style.display = "grid";
   container.style.gridTemplateColumns = "1fr";
   container.style.contain = "layout style paint";
+  // This element is purely decorative/visual; it must not receive input
+  container.style.pointerEvents = "none";
 
   container.append(wrapper);
+  wrapper.style.pointerEvents = "none";
 
   const state = {
     container,
@@ -389,9 +406,12 @@ function createInstance(container) {
     originalOverflowX,
     originalDisplay,
     originalContain,
+    originalPointerEvents: container.style.pointerEvents,
+    originalWrapperPointerEvents: wrapper.style.pointerEvents,
     requestAnimationFrame: view.requestAnimationFrame.bind(view),
     cancelAnimationFrame: view.cancelAnimationFrame.bind(view),
     mutationObserver: null,
+    gapElement,
   };
 
   state.pixelsPerMs = state.speed / FRAME_TIME;
@@ -457,6 +477,8 @@ function createInstance(container) {
   resizeObserver.observe(container);
   resizeObserver.observe(wrapper);
   state.resizeObserver = resizeObserver;
+
+  // Ensure marquee is visual-only: handled via pointer-events none on container and wrapper
 
   if (view.MutationObserver) {
     const mutationObserver = new view.MutationObserver((records) => {
@@ -613,6 +635,7 @@ function detach(container) {
   state.container.style.overflowX = state.originalOverflowX;
   state.container.style.display = state.originalDisplay;
   state.container.style.contain = state.originalContain;
+  state.container.style.pointerEvents = state.originalPointerEvents;
   state.container.style.gridTemplateColumns = "";
 
   instances.delete(container);

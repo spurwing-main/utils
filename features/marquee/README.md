@@ -18,7 +18,7 @@ The marquee feature is a tiny, standalone module whose only job is to make marke
 - **Motion Preferences**: Honors `prefers-reduced-motion`; animation stops immediately when reduction is requested
 - **Adaptive**: Uses `ResizeObserver` to react to meaningful width changes (and only dramatic height shifts) without timers
 - **Clean Cleanup**: Restores the exact DOM nodes (including event listeners) and releases all resources when detached
-- **Accessible by Design**: Cloned nodes are hidden from assistive tech, stripped of duplicate IDs, and prevented from stealing focus
+- **Decorative-Only**: While active, the marquee surface ignores input (`pointer-events: none`) and does not intercept interactions. Original DOM and listeners are restored on detach. Clones do not carry duplicate IDs.
 
 ## Usage
 
