@@ -177,9 +177,16 @@ function createInstance(container) {
     throw new Error("Marquee requires requestAnimationFrame support.");
   }
 
+  const computed = view.getComputedStyle(container);
+  const originalColumnGap = computed.columnGap;
+
   const wrapper = doc.createElement("div");
   wrapper.style.cssText =
     "display:inline-flex;white-space:nowrap;will-change:transform;grid-area:1/1";
+
+  if (originalColumnGap && originalColumnGap !== "normal") {
+    wrapper.style.columnGap = originalColumnGap;
+  }
 
   const originals = Array.from(container.childNodes);
   for (const node of originals) {
