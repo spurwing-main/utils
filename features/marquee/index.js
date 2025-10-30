@@ -8,7 +8,8 @@ const attrSpeed = "data-marquee-speed";
 const FRAME_TIME = 1000 / 60;
 const MIN_WIDTH = 1;
 const WIDTH_EPSILON = 1;
-const HEIGHT_THRESHOLD = 12;
+// POLICY-EXCEPTION: Use UPPER_CASE constant to match existing file style
+const HEIGHT_RATIO_THRESHOLD = 0.25; // 25% change required to trigger refresh for height
 const FOCUSABLE_SELECTOR =
   "a[href],area[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
 
@@ -248,9 +249,19 @@ function createInstance(container) {
           widthChanged = true;
         }
 
-        if (Math.abs(height - state.lastContainerHeight) >= HEIGHT_THRESHOLD) {
+        // Only trigger on significant height changes (>= 25% of last height)
+        // Ignore jitter and minor content shifts; height is less critical for marquee.
+        const baseline = state.lastContainerHeight;
+        if (baseline > 0) {
+          const delta = Math.abs(height - baseline);
+          const ratio = delta / baseline;
+          if (ratio >= HEIGHT_RATIO_THRESHOLD) {
+            state.lastContainerHeight = height;
+            heightChanged = true;
+          }
+        } else {
+          // Establish baseline without triggering a refresh when previous height is 0/invalid
           state.lastContainerHeight = height;
-          heightChanged = true;
         }
       } else if (entry.target === wrapper) {
         const { width } = entry.contentRect;
@@ -414,12 +425,11 @@ function detach(container) {
 }
 
 function rescan(root = document) {
-  const scope = root ?? document;
-  if (!scope?.querySelectorAll) return;
+  if (!root?.querySelectorAll) return;
 
-  const found = new Set(scope.querySelectorAll(`[${attrMarquee}]`));
-  if (scope !== document && scope?.nodeType === 1 && scope.hasAttribute?.(attrMarquee)) {
-    found.add(scope);
+  const found = new Set(root.querySelectorAll(`[${attrMarquee}]`));
+  if (root !== document && root?.nodeType === 1 && root.hasAttribute?.(attrMarquee)) {
+    found.add(root);
   }
 
   for (const element of Array.from(instances.keys())) {
@@ -428,7 +438,7 @@ function rescan(root = document) {
       continue;
     }
 
-    const withinScope = scope === document ? true : scope.contains(element);
+    const withinScope = root === document ? true : root.contains(element);
     if (withinScope && !found.has(element)) {
       detach(element);
     }
@@ -439,7 +449,7 @@ function rescan(root = document) {
   }
 
   debug?.info("rescan complete", {
-    scope: scope === document ? "document" : "element",
+    scope: root === document ? "document" : "element",
     found: found.size,
     active: instances.size,
   });

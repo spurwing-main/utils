@@ -1,3 +1,9 @@
+// Mobile breakpoint for source selection (max-width)
+export const MOBILE_BREAKPOINT = "812px";
+
+// Default root margin for IntersectionObserver
+export const DEFAULT_ROOT_MARGIN = "300px 0px";
+
 export const attr = {
   src: "data-video-src",
   srcMob: "data-video-mob-src",

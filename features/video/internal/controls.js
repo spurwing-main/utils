@@ -3,7 +3,7 @@ Control delegation functions for video feature
 Extracted from features/video/index.js for better modularity
 */
 
-import { isVideo, getDOC } from "./internal-utils.js";
+import { isVideo, getDocument } from "./internal-utils.js";
 
 import { attr, logError } from "./constants.js";
 
@@ -34,7 +34,7 @@ export function onControlKeydown(event, Video, INSTANCES) {
 }
 
 function findActionTarget(startElement, INSTANCES) {
-  const doc = getDOC();
+  const doc = getDocument();
   let element = startElement;
 
   while (element && element !== doc?.documentElement) {
@@ -48,10 +48,15 @@ function findActionTarget(startElement, INSTANCES) {
 
     // Try selector first
     if (selector) {
-      const videos = Array.from(doc.querySelectorAll(selector)).filter(
-        (node) => isVideo(node) && INSTANCES.has(node),
-      );
-      if (videos.length) return { action, videos };
+      try {
+        const videos = Array.from(doc.querySelectorAll(selector)).filter(
+          (node) => isVideo(node) && INSTANCES.has(node),
+        );
+        if (videos.length) return { action, videos };
+      } catch (e) {
+        warn("[video] invalid selector in data-video-target:", selector, e);
+        return null;
+      }
     }
 
     // Find nearest managed video
@@ -93,7 +98,7 @@ function findActionFromEvent(event, INSTANCES) {
 
 // Setup delegated control listeners
 export function setupControlListeners(Video, INSTANCES) {
-  const doc = getDOC();
+  const doc = getDocument();
   if (!doc) return undefined; // No-op teardown since no listeners were attached
 
   // Bound handlers with INSTANCES closed over

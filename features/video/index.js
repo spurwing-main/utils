@@ -1,6 +1,6 @@
 /* Video Feature – see README.md for usage and AGENTS.md for rules. */
 
-import { isVideo, getDOC } from "./internal/internal-utils.js";
+import { isVideo, getDocument } from "./internal/internal-utils.js";
 import { Instance } from "./internal/instance.js";
 import { setupMutationObserver } from "./internal/observers.js";
 import { setupControlListeners } from "./internal/controls.js";
@@ -76,7 +76,7 @@ export const Video = {
     else inst._requestPause("manual");
   },
   attachAll(root) {
-    const ctx = root || getDOC();
+    const ctx = root || getDocument();
     if (!ctx) return [];
     const nodes = ctx.querySelectorAll?.(`video[${attr.src}]`) || [];
     const out = [];
@@ -91,8 +91,9 @@ export const Video = {
 // Mutation observation
 let _booted = false;
 let _initScheduled = false;
+let _controlTeardown = null;
 function boot() {
-  const doc = getDOC();
+  const doc = getDocument();
   if (!doc || _booted) return;
   _booted = true;
   Video.attachAll(doc);
@@ -100,12 +101,12 @@ function boot() {
   // Setup mutation observer
   setupMutationObserver(Video, INSTANCES);
 
-  // Setup delegated controls
-  setupControlListeners(Video, INSTANCES);
+  // Setup delegated controls (store teardown for cleanup)
+  _controlTeardown = setupControlListeners(Video, INSTANCES);
 }
 
 export function init() {
-  const doc = getDOC();
+  const doc = getDocument();
   if (!doc) return;
   if (_booted) return; // already initialized
   if (_initScheduled) return; // idempotent: do not schedule multiple listeners

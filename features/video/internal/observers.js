@@ -2,7 +2,7 @@
 Observer logic for video feature (modern browsers only)
 */
 
-import { isVideo, getDOC } from "./internal-utils.js";
+import { isVideo, getDocument } from "./internal-utils.js";
 import { attr } from "./constants.js";
 
 // Mutation observation setup: attach on add, detach on remove.
@@ -10,7 +10,7 @@ import { attr } from "./constants.js";
 // attribute changes. Authors can call Video.refresh(el) manually
 // if they change configuration attributes after attach.
 export function setupMutationObserver(Video, _INSTANCES) {
-  const doc = getDOC();
+  const doc = getDocument();
   if (!doc) return null;
 
   const observer = new MutationObserver((mutations) => {

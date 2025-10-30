@@ -82,32 +82,29 @@ function getFeatures(scriptElement) {
 
 const features = getFeatures(scriptElement);
 const INITED_FEATURES = new Set();
+const VALID_NAME = /^[a-z0-9_-]+$/;
+const uniqueFeatures = [...new Set(features)];
 
-(async () => {
-  const VALID_NAME = /^[a-z0-9_-]+$/;
-  const uniqueFeatures = [...new Set(features)];
-
-  for (const name of uniqueFeatures) {
-    if (!VALID_NAME.test(name)) {
-      DBG?.warn("invalid feature name:", name);
-      continue;
-    }
-
-    if (INITED_FEATURES.has(name)) continue;
-
-    try {
-      const url = new URL(`./features/${name}/index.js`, import.meta.url).href;
-      const module = await import(url);
-      const init = module?.init ?? module?.default?.init;
-      if (typeof init === "function") {
-        await init();
-        INITED_FEATURES.add(name);
-      }
-    } catch (error) {
-      DBG?.warn("feature failed:", name, error);
-    }
+for (const name of uniqueFeatures) {
+  if (!VALID_NAME.test(name)) {
+    DBG?.warn("invalid feature name:", name);
+    continue;
   }
-})();
+
+  if (INITED_FEATURES.has(name)) continue;
+
+  try {
+    const url = new URL(`./features/${name}/index.js`, import.meta.url).href;
+    const module = await import(url);
+    const init = module?.init ?? module?.default?.init;
+    if (typeof init === "function") {
+      await init();
+      INITED_FEATURES.add(name);
+    }
+  } catch (error) {
+    DBG?.warn("feature failed:", name, error);
+  }
+}
 
 // Package version (mirrors package.json). Update on release.
 export const VERSION = "0.1.12";
