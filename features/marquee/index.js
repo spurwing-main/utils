@@ -63,11 +63,20 @@ function addClones(state) {
 
   const baseWidth = state.loopWidth;
   const containerWidth = Math.max(state.container.clientWidth, MIN_WIDTH);
-  let totalWidth = baseWidth;
 
+  // If container is hidden/zero-width or content has no width, create minimal clones
+  // ResizeObserver will trigger refresh and create proper clones when visible
+  const isHiddenOrEmpty = containerWidth <= MIN_WIDTH || baseWidth <= MIN_WIDTH;
+
+  let totalWidth = baseWidth;
   const fragment = state.container.ownerDocument.createDocumentFragment();
 
-  while (totalWidth < containerWidth + baseWidth) {
+  // For hidden/empty containers, create at least one set of clones for structure
+  // For visible containers, create enough clones to fill the viewport plus one loop
+  const minIterations = isHiddenOrEmpty ? 1 : 0;
+  let iterations = 0;
+
+  while (totalWidth < containerWidth + baseWidth || iterations < minIterations) {
     for (const node of state.originals) {
       const clone = node.cloneNode(true);
       sanitiseClone(clone);
@@ -75,6 +84,10 @@ function addClones(state) {
       state.clones.push(clone);
     }
     totalWidth += baseWidth;
+    iterations++;
+
+    // Safety limit to prevent infinite loops
+    if (iterations > 1000) break;
   }
 
   state.wrapper.append(fragment);
@@ -94,6 +107,12 @@ function refresh(state) {
   state.lastContainerWidth = state.container.clientWidth;
   state.lastContainerHeight = state.container.clientHeight;
   state.lastWrapperWidth = state.wrapper.scrollWidth;
+
+  // If content appears to have zero/minimal width (hidden container, fonts loading, etc.),
+  // schedule a retry when ResizeObserver fires
+  if (state.loopWidth <= MIN_WIDTH && state.originals.length > 0) {
+    debug?.warn("marquee content has minimal width, will retry on resize");
+  }
 }
 
 function stopAnimation(state) {
@@ -358,8 +377,13 @@ function createInstance(container) {
     state.motionHandler = handler;
   }
 
-  refresh(state);
-  startAnimation(state);
+  // Defer initial refresh until after browser layout is complete
+  // This prevents measuring scrollWidth before content is rendered
+  state.requestAnimationFrame(() => {
+    if (!instances.has(state.container)) return;
+    refresh(state);
+    startAnimation(state);
+  });
 
   return state;
 }
