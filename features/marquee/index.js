@@ -8,8 +8,10 @@ const attrSpeed = "data-marquee-speed";
 const FRAME_TIME = 1000 / 60;
 const MIN_WIDTH = 1;
 const WIDTH_EPSILON = 1;
-// POLICY-EXCEPTION: Use UPPER_CASE constant to match existing file style
-const HEIGHT_RATIO_THRESHOLD = 0.25; // 25% change required to trigger refresh for height
+const HEIGHT_RATIO_THRESHOLD = 0.25;
+const CLONE_SAFETY_MARGIN = 2;
+const MAX_CLONE_ITERATIONS = 100;
+const SUBPIXEL_PRECISION = 100;
 const FOCUSABLE_SELECTOR =
   "a[href],area[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
 
@@ -19,11 +21,23 @@ function isElement(node) {
   return node?.nodeType === 1;
 }
 
+function assert(condition, message) {
+  if (!condition) {
+    const error = new Error(`[Marquee] ${message}`);
+    debug?.error(error.message, { stack: error.stack });
+    throw error;
+  }
+}
+
 function readSpeed(element) {
   const raw = element.getAttribute(attrSpeed);
   if (!raw) return 1;
   const value = Number.parseFloat(raw);
-  return Number.isFinite(value) && value > 0 ? value : 1;
+  const speed = Number.isFinite(value) && value > 0 ? value : 1;
+  if (raw && speed === 1 && raw !== "1") {
+    debug?.warn(`Invalid speed value "${raw}", defaulting to 1`, { element });
+  }
+  return speed;
 }
 
 function sanitiseClone(node) {
@@ -52,31 +66,48 @@ function sanitiseClone(node) {
 }
 
 function removeClones(state) {
+  const cloneCount = state.clones.length;
   for (const clone of state.clones) {
     clone.remove();
   }
   state.clones.length = 0;
+  debug?.info(`Removed ${cloneCount} clones`, {
+    container: state.container.id || state.container.className || "unnamed",
+  });
 }
 
 function addClones(state) {
-  if (state.originals.length === 0) return;
+  const startTime = performance.now();
+
+  if (state.originals.length === 0) {
+    debug?.warn("No original content to clone", {
+      container: state.container.id || state.container.className || "unnamed",
+    });
+    return;
+  }
 
   const baseWidth = state.loopWidth;
   const containerWidth = Math.max(state.container.clientWidth, MIN_WIDTH);
 
-  // If container is hidden/zero-width or content has no width, create minimal clones
-  // ResizeObserver will trigger refresh and create proper clones when visible
-  const isHiddenOrEmpty = containerWidth <= MIN_WIDTH || baseWidth <= MIN_WIDTH;
+  if (!Number.isFinite(baseWidth) || !Number.isFinite(containerWidth)) {
+    debug?.error("Invalid dimensions for clone creation", {
+      baseWidth,
+      containerWidth,
+      loopWidth: state.loopWidth,
+    });
+    return;
+  }
 
-  let totalWidth = baseWidth;
   const fragment = state.container.ownerDocument.createDocumentFragment();
-
-  // For hidden/empty containers, create at least one set of clones for structure
-  // For visible containers, create enough clones to fill the viewport plus one loop
-  const minIterations = isHiddenOrEmpty ? 1 : 0;
+  const targetWidth = containerWidth + baseWidth * CLONE_SAFETY_MARGIN;
+  let totalWidth = 0;
   let iterations = 0;
+  const minIterations = 2;
 
-  while (totalWidth < containerWidth + baseWidth || iterations < minIterations) {
+  while (
+    (totalWidth < targetWidth || iterations < minIterations) &&
+    iterations < MAX_CLONE_ITERATIONS
+  ) {
     for (const node of state.originals) {
       const clone = node.cloneNode(true);
       sanitiseClone(clone);
@@ -85,34 +116,97 @@ function addClones(state) {
     }
     totalWidth += baseWidth;
     iterations++;
+  }
 
-    // Safety limit to prevent infinite loops
-    if (iterations > 1000) break;
+  if (iterations >= MAX_CLONE_ITERATIONS) {
+    debug?.error(`Hit max clone iterations limit (${MAX_CLONE_ITERATIONS})`, {
+      baseWidth,
+      containerWidth,
+      targetWidth,
+    });
   }
 
   state.wrapper.append(fragment);
+
+  const duration = performance.now() - startTime;
+  debug?.info(`Created ${state.clones.length} clones in ${duration.toFixed(2)}ms`, {
+    iterations,
+    baseWidth: baseWidth.toFixed(2),
+    containerWidth: containerWidth.toFixed(2),
+  });
 }
 
 function refresh(state) {
+  const startTime = performance.now();
+
+  debug?.info("Starting refresh", {
+    container: state.container.id || state.container.className || "unnamed",
+    currentOffset: state.offset.toFixed(2),
+    loopWidth: state.loopWidth.toFixed(2),
+  });
+
   removeClones(state);
 
-  state.loopWidth = Math.max(state.wrapper.scrollWidth, MIN_WIDTH);
+  let contentWidth = state.wrapper.scrollWidth;
+  const view = state.container.ownerDocument?.defaultView;
+
+  if (view) {
+    const computed = view.getComputedStyle(state.wrapper);
+    const gap = computed.gap || computed.columnGap;
+    if (gap && gap !== "normal" && gap !== "0px") {
+      const gapValue = parseFloat(gap);
+      if (Number.isFinite(gapValue) && gapValue > 0) {
+        contentWidth += gapValue;
+        debug?.info(`Added trailing gap: ${gapValue}px`, {
+          originalWidth: state.wrapper.scrollWidth,
+          withGap: contentWidth,
+        });
+      }
+    }
+  }
+
+  if (!Number.isFinite(contentWidth) || contentWidth < 0) {
+    debug?.error("Invalid content width measured", {
+      scrollWidth: state.wrapper.scrollWidth,
+      contentWidth,
+    });
+    contentWidth = MIN_WIDTH;
+  }
+
+  state.loopWidth = Math.max(contentWidth, MIN_WIDTH);
   state.speed = readSpeed(state.container);
   state.pixelsPerMs = state.speed / FRAME_TIME;
-  state.offset %= state.loopWidth;
-  if (!Number.isFinite(state.offset)) state.offset = 0;
+
+  if (!Number.isFinite(state.offset)) {
+    debug?.warn("Invalid offset detected, resetting to 0", { offset: state.offset });
+    state.offset = 0;
+  } else {
+    state.offset %= state.loopWidth;
+  }
 
   addClones(state);
-  state.wrapper.style.transform = `translateX(-${state.offset}px)`;
+
+  const roundedOffset = Math.round(state.offset * SUBPIXEL_PRECISION) / SUBPIXEL_PRECISION;
+  state.wrapper.style.transform = `translateX(-${roundedOffset}px)`;
+
   state.lastContainerWidth = state.container.clientWidth;
   state.lastContainerHeight = state.container.clientHeight;
   state.lastWrapperWidth = state.wrapper.scrollWidth;
 
-  // If content appears to have zero/minimal width (hidden container, fonts loading, etc.),
-  // schedule a retry when ResizeObserver fires
   if (state.loopWidth <= MIN_WIDTH && state.originals.length > 0) {
-    debug?.warn("marquee content has minimal width, will retry on resize");
+    debug?.warn("Marquee content has minimal width - possible blank spaces until resize", {
+      loopWidth: state.loopWidth,
+      originalsCount: state.originals.length,
+      containerWidth: state.container.clientWidth,
+    });
   }
+
+  const duration = performance.now() - startTime;
+  debug?.info(`Refresh complete in ${duration.toFixed(2)}ms`, {
+    loopWidth: state.loopWidth.toFixed(2),
+    speed: state.speed,
+    cloneCount: state.clones.length,
+  });
 }
 
 function stopAnimation(state) {
@@ -124,35 +218,64 @@ function stopAnimation(state) {
 
 function startAnimation(state) {
   if (state.reducedMotion) {
+    debug?.info("Animation disabled due to prefers-reduced-motion");
     stopAnimation(state);
     state.offset = 0;
     state.wrapper.style.transform = "translateX(0)";
     return;
   }
 
-  if (state.animationId !== null) return;
+  if (state.animationId !== null) {
+    debug?.warn("Animation already running", { animationId: state.animationId });
+    return;
+  }
+
+  debug?.info("Starting animation", {
+    speed: state.speed,
+    loopWidth: state.loopWidth.toFixed(2),
+  });
 
   const step = (timestamp) => {
     if (state.animationId === null) return;
+
     if (!state.container.isConnected || !state.container.hasAttribute(attrMarquee)) {
+      debug?.info("Container disconnected or attribute removed, auto-detaching");
       detach(state.container);
       return;
     }
 
     if (state.lastTick === null) {
       state.lastTick = timestamp;
+      state.animationId = state.requestAnimationFrame(step);
+      return;
     }
 
     const delta = timestamp - state.lastTick;
     state.lastTick = timestamp;
 
+    if (delta > 1000) {
+      debug?.warn("Large frame delta detected, skipping", { delta });
+      state.animationId = state.requestAnimationFrame(step);
+      return;
+    }
+
     state.offset += state.pixelsPerMs * delta;
 
     if (state.offset >= state.loopWidth) {
       state.offset %= state.loopWidth;
+      debug?.info("Loop point reached", {
+        newOffset: state.offset.toFixed(2),
+        loopWidth: state.loopWidth.toFixed(2),
+      });
     }
 
-    state.wrapper.style.transform = `translateX(-${state.offset}px)`;
+    if (!Number.isFinite(state.offset)) {
+      debug?.error("Invalid offset in animation loop", { offset: state.offset });
+      state.offset = 0;
+    }
+
+    const roundedOffset = Math.round(state.offset * SUBPIXEL_PRECISION) / SUBPIXEL_PRECISION;
+    state.wrapper.style.transform = `translateX(-${roundedOffset}px)`;
     state.animationId = state.requestAnimationFrame(step);
   };
 
@@ -186,38 +309,60 @@ function scheduleRefresh(state) {
 }
 
 function createInstance(container) {
+  const startTime = performance.now();
   const doc = container.ownerDocument;
   const view = doc?.defaultView;
 
-  if (!view?.ResizeObserver) {
-    throw new Error("Marquee requires ResizeObserver support.");
-  }
-  if (!view.requestAnimationFrame || !view.cancelAnimationFrame) {
-    throw new Error("Marquee requires requestAnimationFrame support.");
-  }
+  assert(view, "Container must be in a document with a window");
+  assert(view.ResizeObserver, "ResizeObserver not supported - required for marquee");
+  assert(
+    view.requestAnimationFrame && view.cancelAnimationFrame,
+    "requestAnimationFrame/cancelAnimationFrame not supported - required for marquee",
+  );
+
+  debug?.info("Creating marquee instance", {
+    container: container.id || container.className || "unnamed",
+  });
 
   const computed = view.getComputedStyle(container);
   const originalColumnGap = computed.columnGap;
 
   const wrapper = doc.createElement("div");
-  wrapper.style.cssText =
-    "display:inline-flex;white-space:nowrap;will-change:transform;grid-area:1/1";
+  wrapper.style.cssText = [
+    "display:flex",
+    "white-space:nowrap",
+    "will-change:transform",
+    "grid-area:1/1",
+    "min-width:0",
+    "max-width:100%",
+    "flex-shrink:0",
+    "contain:layout style",
+  ].join(";");
 
   if (originalColumnGap && originalColumnGap !== "normal") {
     wrapper.style.columnGap = originalColumnGap;
+    wrapper.style.gap = originalColumnGap;
   }
 
   const originals = Array.from(container.childNodes);
+  if (originals.length === 0) {
+    debug?.warn("Container has no child nodes to animate", { container });
+  }
+
   for (const node of originals) {
     wrapper.append(node);
   }
 
   const originalOverflow = container.style.overflow;
+  const originalOverflowX = container.style.overflowX;
   const originalDisplay = container.style.display;
+  const originalContain = container.style.contain;
 
   container.style.overflow = "hidden";
+  container.style.overflowX = "hidden";
   container.style.display = "grid";
   container.style.gridTemplateColumns = "1fr";
+  container.style.contain = "layout style paint";
 
   container.append(wrapper);
 
@@ -239,7 +384,9 @@ function createInstance(container) {
     motionQuery: null,
     motionHandler: null,
     originalOverflow,
+    originalOverflowX,
     originalDisplay,
+    originalContain,
     requestAnimationFrame: view.requestAnimationFrame.bind(view),
     cancelAnimationFrame: view.cancelAnimationFrame.bind(view),
     mutationObserver: null,
@@ -272,8 +419,6 @@ function createInstance(container) {
           widthChanged = true;
         }
 
-        // Only trigger on significant height changes (>= 25% of last height)
-        // Ignore jitter and minor content shifts; height is less critical for marquee.
         const baseline = state.lastContainerHeight;
         if (baseline > 0) {
           const delta = Math.abs(height - baseline);
@@ -283,7 +428,6 @@ function createInstance(container) {
             heightChanged = true;
           }
         } else {
-          // Establish baseline without triggering a refresh when previous height is 0/invalid
           state.lastContainerHeight = height;
         }
       } else if (entry.target === wrapper) {
@@ -377,12 +521,24 @@ function createInstance(container) {
     state.motionHandler = handler;
   }
 
-  // Defer initial refresh until after browser layout is complete
-  // This prevents measuring scrollWidth before content is rendered
+  // Double rAF ensures flex layout with gaps is fully computed before measuring
   state.requestAnimationFrame(() => {
-    if (!instances.has(state.container)) return;
-    refresh(state);
-    startAnimation(state);
+    state.requestAnimationFrame(() => {
+      if (!instances.has(state.container)) {
+        debug?.warn("Container no longer in instances map during initialization");
+        return;
+      }
+      refresh(state);
+      startAnimation(state);
+    });
+  });
+
+  const duration = performance.now() - startTime;
+  debug?.info(`Instance created in ${duration.toFixed(2)}ms`, {
+    container: container.id || container.className || "unnamed",
+    speed: state.speed,
+    originalsCount: state.originals.length,
+    reducedMotion: state.reducedMotion,
   });
 
   return state;
@@ -410,7 +566,15 @@ function attach(container) {
 
 function detach(container) {
   const state = instances.get(container);
-  if (!state) return;
+  if (!state) {
+    debug?.warn("Attempted to detach non-attached container");
+    return;
+  }
+
+  debug?.info("Detaching marquee", {
+    container: container.id || container.className || "unnamed",
+    cloneCount: state.clones.length,
+  });
 
   stopAnimation(state);
 
@@ -444,11 +608,17 @@ function detach(container) {
   state.wrapper.remove();
 
   state.container.style.overflow = state.originalOverflow;
+  state.container.style.overflowX = state.originalOverflowX;
   state.container.style.display = state.originalDisplay;
+  state.container.style.contain = state.originalContain;
   state.container.style.gridTemplateColumns = "";
 
   instances.delete(container);
-  debug?.info("marquee detached");
+
+  debug?.info("Marquee detached successfully", {
+    container: container.id || container.className || "unnamed",
+    activeInstances: instances.size,
+  });
 }
 
 function rescan(root = document) {
