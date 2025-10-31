@@ -1,24 +1,23 @@
 # Marquee Feature
 
-A standalone, minimal module for creating smooth, endless scrolling animations using declarative attributes.
+A standalone module for creating smooth, endless scrolling marquees using CSS keyframes. It uses modern JavaScript, modern CSS, and modern Web APIs targeting evergreen browsers.
 
 ## Overview
 
-The marquee feature is a tiny, standalone module whose only job is to make marked containers scroll their content smoothly and endlessly. It uses `data-marquee` attributes for configuration and automatically discovers elements on initialization.
+The marquee feature makes marked containers scroll their content smoothly and endlessly. It discovers elements automatically on initialization.
 
 ## Features
 
-- **Attribute-Based**: Uses `data-marquee` and `data-marquee-speed` attributes for configuration
+- **Attribute-Based**: Uses `data-marquee` with optional `data-marquee-direction`, `data-marquee-speed`, and `data-marquee-pause-on-hover`
 - **Automatic Discovery**: `init()` and `rescan()` automatically find and manage elements
 - **Scoped Rescans**: `rescan(root)` only touches marquees inside the provided root (or the whole document by default)
-- **Natural Container Height**: Uses CSS Grid to automatically size container to content height - no explicit heights needed
-- **Consistent Speed**: Speed is expressed in pixels per frame at 60fps, giving identical motion for equal values
-- **Attribute-Aware**: Speed updates react immediately; removing `data-marquee` detaches the instance automatically
-- **Seamless Looping**: Content is cloned and animated with transforms for smooth, jump-free scrolling
+- **CSS Keyframes**: Uses compositor-friendly `transform` animations with a unique keyframe per marquee
+- **Consistent Speed**: Speed is expressed in pixels per second (px/s)
+- **Attribute-Aware**: Speed/direction/hover updates react immediately; removing the attribute detaches the instance automatically
+- **Seamless Looping**: Content is duplicated to ensure a jump‑free, continuous scroll
 - **Motion Preferences**: Honors `prefers-reduced-motion`; animation stops immediately when reduction is requested
-- **Adaptive**: Uses `ResizeObserver` to react to meaningful width changes (and only dramatic height shifts) without timers
+- **Adaptive**: Uses `ResizeObserver` and mutation observers to react to size/attribute changes
 - **Clean Cleanup**: Restores the exact DOM nodes (including event listeners) and releases all resources when detached
-- **Decorative-Only**: While active, the marquee surface ignores input (`pointer-events: none`) and does not intercept interactions. Original DOM and listeners are restored on detach. Clones do not carry duplicate IDs.
 
 ## Usage
 
@@ -27,14 +26,14 @@ The marquee feature is a tiny, standalone module whose only job is to make marke
 ```html
 <script type="module" src="/loader.js" data-features="marquee"></script>
 
-<!-- Basic marquee with default speed (1px per frame at 60fps) -->
-<div data-marquee>
+<!-- Basic marquee (children inherit gap from container) -->
+<div data-marquee style="gap: 1.5rem;">
   <span>Your content here</span>
   <span>More content</span>
 </div>
 
-<!-- Faster marquee with custom speed (2px per frame at 60fps) -->
-<div data-marquee data-marquee-speed="2">
+<!-- Faster marquee with custom speed (px/s) -->
+<div data-marquee data-marquee-speed="180" style="gap: 2rem;">
   <span>Fast content</span>
   <span>Fast content 2</span>
 </div>
@@ -48,7 +47,7 @@ import { Marquee } from '@tim-spw/utils/marquee';
 // Add a new marquee element dynamically
 const container = document.createElement('div');
 container.setAttribute('data-marquee', '');
-container.setAttribute('data-marquee-speed', '1.5');
+container.setAttribute('data-marquee-speed', '150');
 container.innerHTML = '<span>New content</span>';
 document.body.appendChild(container);
 
@@ -116,78 +115,78 @@ Marks an element as a marquee container. The presence of this attribute (value d
 
 ### `data-marquee-speed`
 
-Sets the animation speed in pixels per frame at 60fps. Higher values = faster scrolling.
+Sets the animation speed in pixels per second. Higher values = faster scrolling.
 
-- Default: `1` (1 pixel per frame)
+- Default: `100` (100 px/s)
 - Valid range: Any positive number
-- Speed is consistent across all marquees - same value means same visual speed
+- Speed is consistent across marquees - same value means same visual speed
 
 ```html
 <!-- Slow -->
-<div data-marquee data-marquee-speed="0.5">Slow content</div>
+<div data-marquee data-marquee-speed="60">Slow content</div>
 
 <!-- Normal -->
-<div data-marquee data-marquee-speed="1">Normal content</div>
+<div data-marquee data-marquee-speed="100">Normal content</div>
 
 <!-- Fast -->
-<div data-marquee data-marquee-speed="3">Fast content</div>
+<div data-marquee data-marquee-speed="240">Fast content</div>
+
+### `data-marquee-direction`
+
+Sets the scroll direction.
+
+- Values: `left` (default) or `right`
+
+### `data-marquee-pause-on-hover`
+
+Pauses the animation while hovering the marquee container (attribute presence enables it).
+
 ```
 
-### `data-marquee-gap`
-
-Optional cycle gap in pixels between repeated content cycles. When not set, the marquee inherits the computed `gap`/`column-gap` from the marquee container. Set this attribute when you need an explicit, class‑free gap.
-
-```html
-<!-- Explicit 24px gap between cycles -->
-<div data-marquee data-marquee-gap="24">
-  <span>Item A</span>
-  <span>Item B</span>
-  <span>Item C</span>
-  <!-- Repeated cycles will be separated by 24px -->
-  <!-- The internal spacing between Item A/B/C should be handled by your own markup/styles. -->
-  <!-- The marquee only controls the gap between cycles. -->
-  
-</div>
-```
 
 ## Speed Calculation
 
-Speed is measured in pixels per frame at 60fps:
-- `speed="1"` → moves 1 pixel per frame → 60 pixels per second
-- `speed="2"` → moves 2 pixels per frame → 120 pixels per second
-- `speed="0.5"` → moves 0.5 pixels per frame → 30 pixels per second
+Speed is measured in pixels per second:
+- `speed="60"` → 60 px/s
+- `speed="120"` → 120 px/s
+- `speed="240"` → 240 px/s
 
-All marquees with the same speed value will scroll at the same visual speed, regardless of content size.
+Marquees with the same `data-marquee-speed` value scroll at the same pixel-per-second rate regardless of content size, so they appear in sync even if their content widths differ.
+
+## Gap Handling
+
+- Set `gap` (or `column-gap`/`row-gap`) directly on the marquee container.
+- The runtime sets `gap: inherit` on internal wrappers so your chosen spacing is applied consistently to all repeated content cycles.
+
+Example:
+
+```html
+<div data-marquee style="gap: 24px">
+  <span>Item A</span>
+  <span>Item B</span>
+  <span>Item C</span>
+</div>
+```
 
 ## Lifecycle
 
 1. **Init**: `init()` is called (automatically by loader or manually)
 2. **Discovery**: Scans for `[data-marquee]` elements
 3. **Attachment**: Creates animation instance for each element
-4. **Animation**: Smoothly scrolls content using requestAnimationFrame
+4. **Animation**: Smoothly scrolls content using CSS keyframes (`transform: translateX`)
 5. **Rescan**: Call `rescan()` when adding/removing elements
 6. **Detachment**: Removes animation and restores original DOM
 
 ## How It Works
 
 1. **Preparation**: When attached:
-   - Saves the original DOM state and display style
-   - Wraps content in a CSS Grid container for natural height
-   - Sets container to `display: grid` with `grid-template-columns: 1fr`
-   - Positions wrapper using `grid-area: 1/1` (overlays in same grid cell)
-   - Clones the content to create a seamless loop
-   - Sanitizes clones (removes duplicate IDs, hides from assistive tech, disables focus)
-   - Measures content width for proper looping
+   - Saves original nodes and wraps them inside a single `marquee-inner > [data-marquee-cycle]`
+   - Duplicates the content as many times as needed to exceed 2× the container width
+   - Sets container to `display: flex; overflow: hidden` and inner to `display: flex; width: max-content`
 
-2. **Animation**: Uses `requestAnimationFrame` to:
-   - Update position smoothly at 60fps using CSS transforms
-   - Reset position when one loop completes
-   - Create the illusion of endless scrolling
+2. **Animation**: Uses a unique `@keyframes` per marquee to translate by half the total content width, looping seamlessly.
 
-3. **Adaptation**: Uses `ResizeObserver` to:
-   - Detect meaningful width changes in the container or wrapper
-   - Ignore minor jitter while still reacting to dramatic height shifts
-   - Recalculate content measurements and adjust clones as needed
+3. **Adaptation**: Uses `ResizeObserver`, mutation observers, and font/image readiness to re-measure and adjust clones and animation.
 
 4. **Cleanup**: When detached:
    - Cancels animation frame
@@ -201,9 +200,7 @@ All marquees with the same speed value will scroll at the same visual speed, reg
 
 Modern evergreen browsers only. The marquee requires:
 
-- CSS Grid (`display: grid`, `grid-area`)
 - `ResizeObserver`
-- `requestAnimationFrame`
 - `matchMedia('(prefers-reduced-motion)')`
 
 There are no legacy fallbacks.

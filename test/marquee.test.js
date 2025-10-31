@@ -335,7 +335,7 @@ test("marquee cleans up on detach", async () => {
   assert.ok(true, "cleanup completed successfully");
 });
 
-test("marquee surface ignores input and clones exist", async () => {
+test("marquee surface is interactive and animation configured", async () => {
   const { window } = await setupDom();
   const mod = await importMarqueeFeatureFresh();
 
@@ -352,15 +352,13 @@ test("marquee surface ignores input and clones exist", async () => {
   mod.Marquee.attach(container);
   await new Promise((resolve) => setTimeout(resolve, 50));
 
-  const clones = container.querySelectorAll("[data-marquee-clone]");
-  assert.ok(clones.length > 0, "clones created for seamless marquee");
-
-  // Surface should not intercept input
-  assert.equal(container.style.pointerEvents, "none", "container ignores pointer events");
   const wrapper = container.querySelector("div");
-  if (wrapper) {
-    assert.equal(wrapper.style.pointerEvents, "none", "wrapper ignores pointer events");
-  }
+  assert.ok(wrapper, "wrapper created");
+  // Surface remains interactive; no pointer-events suppression
+  assert.notEqual(container.style.pointerEvents, "none", "container remains interactive");
+  // Animation configured via injected keyframes style
+  const keyframeStyle = document.head.querySelector('style[id^="marquee-"]');
+  assert.ok(keyframeStyle, "keyframes style injected");
 
   mod.Marquee.detach(container);
 });
@@ -383,11 +381,12 @@ test("marquee animation uses transform for movement", async () => {
 
   // Wrapper should be created with proper structure
   assert.ok(wrapper, "wrapper element created");
-  assert.ok(wrapper.style.gridArea.includes("1"), "wrapper positioned using grid-area");
-  assert.equal(container.style.display, "grid", "container uses grid display");
-
-  // Animation uses transform (may be empty string initially in test env, but property exists)
+  assert.equal(container.style.display, "flex", "container uses flex display");
+  assert.ok(wrapper.style.willChange.includes("transform"), "will-change: transform configured");
+  // Animation uses transform (property exists and animation is set)
   assert.ok("transform" in wrapper.style, "transform property available for animation");
+  const keyframeStyle2 = document.head.querySelector('style[id^="marquee-"]');
+  assert.ok(keyframeStyle2, "keyframes style injected");
 
   mod.Marquee.detach(container);
 });
@@ -405,17 +404,12 @@ test("marquee uses GPU-accelerated transform for performance", async () => {
   await new Promise((resolve) => setTimeout(resolve, 100));
 
   const wrapper = container.querySelector("div");
-  if (wrapper) {
-    // Check for performance-optimized styles
-    const cssText = wrapper.style.cssText;
-    assert.ok(cssText.includes("will-change"), "uses will-change hint for browser optimization");
-    assert.ok(cssText.includes("grid-area"), "uses grid-area for positioning");
-    assert.ok(cssText.includes("display"), "has display property set");
-    assert.ok(cssText.includes("white-space"), "has white-space property set");
-  } else {
-    // Wrapper creation timing issue in test environment
-    assert.ok(true, "performance optimizations configured");
-  }
+  assert.ok(wrapper, "wrapper exists");
+  // Check for performance-optimized styles
+  const cssText = wrapper.style.cssText;
+  assert.ok(cssText.includes("will-change"), "uses will-change hint for browser optimization");
+  assert.ok(cssText.includes("display: flex"), "uses flex for layout");
+  assert.ok(cssText.includes("width: max-content"), "uses max-content width");
 
   mod.Marquee.detach(container);
 });
@@ -567,15 +561,10 @@ test("marquee performance: no layout thrashing", async () => {
 
   const wrapper = container.querySelector("div");
 
-  if (wrapper) {
-    // Verify grid-based positioning with transform for movement
-    assert.ok(wrapper.style.cssText.includes("grid-area"), "grid-area is configured");
-    assert.equal(container.style.display, "grid", "uses grid display");
-    // Position changes via transform only (checked by implementation)
-  } else {
-    // Test timing issue
-    assert.ok(true, "performance characteristics configured");
-  }
+  assert.ok(wrapper, "wrapper exists");
+  // Verify transform-based movement and flex-based layout
+  assert.equal(container.style.display, "flex", "uses flex display");
+  assert.ok(wrapper.style.willChange.includes("transform"), "transform-based movement configured");
 
   mod.Marquee.detach(container);
 });

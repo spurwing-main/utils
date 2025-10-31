@@ -49,14 +49,7 @@
       overflow: hidden;
     }
 
-    .marquee-content {
-      display: inline-flex;
-      gap: 1.75rem;
-      align-items: center;
-      white-space: nowrap;
-      font-weight: 600;
-      letter-spacing: 0.01em;
-    }
+    /* Gap is set on the [data-marquee] container. Internal wrappers inherit. */
 
     .chip {
       display: inline-flex;
@@ -221,13 +214,11 @@
     <p>
       Watch the loop restart boundary carefully. Any visible jump indicates precision or measurement issues.
     </p>
-    <div class="marquee-box" data-marquee data-marquee-speed="3" style="font-size: 3rem; padding: 3rem 2rem; height: 200px;">
-      <div class="marquee-content" style="gap: 4rem;">
-        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #ef4444, #dc2626); color: white; font-weight: 800;">★ WATCH FOR JUMPS ★</span>
-        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; font-weight: 800;">⚡ SEAMLESS LOOP ⚡</span>
-        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #10b981, #059669); color: white; font-weight: 800;">✓ NO DISCONTINUITY ✓</span>
-        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; font-weight: 800;">→ INFINITE SCROLL →</span>
-      </div>
+    <div class="marquee-box" data-marquee data-marquee-speed="120" style="font-size: 3rem; padding: 3rem 2rem; height: 200px; gap: 4rem;">
+      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #ef4444, #dc2626); color: white; font-weight: 800;">★ WATCH FOR JUMPS ★</span>
+      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; font-weight: 800;">⚡ SEAMLESS LOOP ⚡</span>
+      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #10b981, #059669); color: white; font-weight: 800;">✓ NO DISCONTINUITY ✓</span>
+      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; font-weight: 800;">→ INFINITE SCROLL →</span>
     </div>
   </section>
 
@@ -235,20 +226,16 @@
     <h2>02. High contrast jump detector</h2>
     <p>High speed + bold stripes make any loop discontinuity obvious. Watch for sudden position shifts.</p>
     <div class="stacked">
-      <div class="marquee-box" data-marquee data-marquee-speed="4" style="background: #000; padding: 2.5rem;">
-        <div class="marquee-content" style="gap: 3rem;">
-          <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #fff; color: #000; font-weight: 900;">▮▮▮ BLACK ▮▮▮</span>
-          <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #ff0000; color: #fff; font-weight: 900;">▮▮▮ RED ▮▮▮</span>
-          <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #00ff00; color: #000; font-weight: 900;">▮▮▮ GREEN ▮▮▮</span>
-          <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #0000ff; color: #fff; font-weight: 900;">▮▮▮ BLUE ▮▮▮</span>
-        </div>
+      <div class="marquee-box" data-marquee data-marquee-speed="180" style="background: #000; padding: 2.5rem; gap: 3rem;">
+        <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #fff; color: #000; font-weight: 900;">▮▮▮ BLACK ▮▮▮</span>
+        <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #ff0000; color: #fff; font-weight: 900;">▮▮▮ RED ▮▮▮</span>
+        <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #00ff00; color: #000; font-weight: 900;">▮▮▮ GREEN ▮▮▮</span>
+        <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #0000ff; color: #fff; font-weight: 900;">▮▮▮ BLUE ▮▮▮</span>
       </div>
-      <div class="marquee-box" data-marquee data-marquee-speed="5" data-marquee-gap="80" style="background: linear-gradient(90deg, #1e293b 0%, #334155 100%); padding: 3rem;">
-        <div class="marquee-content" style="gap: 5rem;">
-          <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #fbbf24; color: #000; font-weight: 900; box-shadow: 0 0 30px #fbbf24;">GAP TEST</span>
-          <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #a78bfa; color: #fff; font-weight: 900; box-shadow: 0 0 30px #a78bfa;">LARGE GAP</span>
-          <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #34d399; color: #000; font-weight: 900; box-shadow: 0 0 30px #34d399;">80PX GAP</span>
-        </div>
+      <div class="marquee-box" data-marquee data-marquee-speed="220" style="background: linear-gradient(90deg, #1e293b 0%, #334155 100%); padding: 3rem; gap: 5rem;">
+        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #fbbf24; color: #000; font-weight: 900; box-shadow: 0 0 30px #fbbf24;">GAP TEST</span>
+        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #a78bfa; color: #fff; font-weight: 900; box-shadow: 0 0 30px #a78bfa;">LARGE GAP</span>
+        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #34d399; color: #000; font-weight: 900; box-shadow: 0 0 30px #34d399;">WIDE GAP</span>
       </div>
     </div>
   </section>
@@ -259,13 +246,11 @@
       Focusable children remain interactive in the original DOM. Cloned nodes are hidden from assistive tech and cannot
       capture focus.
     </p>
-    <div class="marquee-box" data-marquee data-marquee-speed="1.35">
-      <div class="marquee-content">
-        <a href="https://github.com/spurwing-main/utils" target="_blank" rel="noreferrer">View source</a>
-        <button type="button">Trigger CTA</button>
-        <a href="https://biomejs.dev/" target="_blank" rel="noreferrer">Biome powered</a>
-        <button type="button">Safe cleanup</button>
-      </div>
+    <div class="marquee-box" data-marquee data-marquee-speed="120" style="gap: 2rem;">
+      <a href="https://github.com/spurwing-main/utils" target="_blank" rel="noreferrer">View source</a>
+      <button type="button">Trigger CTA</button>
+      <a href="https://biomejs.dev/" target="_blank" rel="noreferrer">Biome powered</a>
+      <button type="button">Safe cleanup</button>
     </div>
   </section>
 
@@ -293,17 +278,13 @@
       <button type="button" class="secondary" data-action="scoped-rescan">Rescan scoped region</button>
     </div>
     <div id="scoped-root" class="stacked" aria-live="polite">
-      <div class="marquee-box" data-marquee data-marquee-speed="1.1" data-scope="primary">
-        <div class="marquee-content">
-          <span class="chip">Scoped marquee A</span>
-          <span class="chip">Will detach when toggled off</span>
-        </div>
+      <div class="marquee-box" data-marquee data-marquee-speed="100" data-scope="primary" style="gap: 1.25rem;">
+        <span class="chip">Scoped marquee A</span>
+        <span class="chip">Will detach when toggled off</span>
       </div>
-      <div class="marquee-box" data-marquee data-marquee-speed="1.8">
-        <div class="marquee-content">
-          <span class="chip">Scoped marquee B</span>
-          <span class="chip">Always stays running</span>
-        </div>
+      <div class="marquee-box" data-marquee data-marquee-speed="160" style="gap: 1.25rem;">
+        <span class="chip">Scoped marquee B</span>
+        <span class="chip">Always stays running</span>
       </div>
     </div>
   </section>
@@ -321,12 +302,10 @@
       </label>
       <button type="button" class="ghost" data-action="resize-reset">Reset width</button>
     </div>
-    <div class="marquee-box responsive-box" data-marquee data-marquee-speed="1.6" style="max-width: 480px;">
-      <div class="marquee-content">
-        <span class="chip">Resize-aware marquee</span>
-        <span class="chip">Only meaningful width deltas</span>
-        <span class="chip">Large height shifts refresh too</span>
-      </div>
+    <div class="marquee-box responsive-box" data-marquee data-marquee-speed="140" style="max-width: 480px; gap: 1.25rem;">
+      <span class="chip">Resize-aware marquee</span>
+      <span class="chip">Only meaningful width deltas</span>
+      <span class="chip">Large height shifts refresh too</span>
     </div>
   </section>
 
@@ -369,7 +348,7 @@
 
     const dynamicZone = document.getElementById('dynamic-zone');
     let dynamicContainer = null;
-    const dynamicSpeeds = [1, 2.4];
+    const dynamicSpeeds = [120, 240];
     let dynamicSpeedIndex = 0;
 
     const buildDynamicMarquee = () => {
@@ -378,15 +357,12 @@
       container.dataset.marquee = '';
       container.dataset.marqueeSpeed = String(dynamicSpeeds[dynamicSpeedIndex]);
 
-      const content = document.createElement('div');
-      content.className = 'marquee-content';
-      content.append(
+      container.style.gap = '1.25rem';
+      container.append(
         createChip('Runtime marquee'),
-        createChip(`Speed: ${dynamicSpeeds[dynamicSpeedIndex]}px/frame`),
+        createChip(`Speed: ${dynamicSpeeds[dynamicSpeedIndex]}px/s`),
         createChip('Added via JS'),
       );
-
-      container.append(content);
       return container;
     };
 
