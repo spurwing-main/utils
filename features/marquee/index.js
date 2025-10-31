@@ -2,14 +2,13 @@
 
 const instances = new Map();
 let initialized = false;
-
-function $(sel, ctx = document) { return Array.from(ctx.querySelectorAll(sel)); }
 function genId() { return `mq-${Math.random().toString(36).slice(2, 10)}`; }
 
 function readSettings(el) {
   const dir = (el.getAttribute("data-marquee-direction") || "left").toLowerCase();
   const speedRaw = el.getAttribute("data-marquee-speed");
-  const speed = Number.isFinite(parseFloat(speedRaw)) && parseFloat(speedRaw) > 0 ? parseFloat(speedRaw) : 100; // px/s
+  const parsed = Number.parseFloat(speedRaw);
+  const speed = Number.isFinite(parsed) && parsed > 0 ? parsed : 100; // px/s
   const pauseOnHover = el.hasAttribute("data-marquee-pause-on-hover");
   return { direction: dir === "right" ? "right" : "left", speed, pauseOnHover };
 }
@@ -78,9 +77,9 @@ function readTranslateX(el) {
   const t = getComputedStyle(el).transform || "";
   if (t === "none") return 0;
   const m = t.match(/^matrix\(([^)]+)\)$/);
-  if (m) return parseFloat(m[1].split(",")[4]) || 0;
+  if (m) return Number.parseFloat(m[1].split(",")[4]) || 0;
   const m3 = t.match(/^matrix3d\(([^)]+)\)$/);
-  if (m3) return parseFloat(m3[1].split(",")[12]) || 0;
+  if (m3) return Number.parseFloat(m3[1].split(",")[12]) || 0;
   return 0;
 }
 
@@ -190,7 +189,7 @@ function watchImagesOnce(state) {
 }
 
 function buildHalves(state) {
-  const { container, inner, halfA, unitOriginal } = state;
+  const { container, halfA, unitOriginal } = state;
 
   // Remove extra clones in A, keep original unit
   while (unitOriginal.nextSibling) unitOriginal.nextSibling.remove();
@@ -256,7 +255,7 @@ function ensureAnimation(state, halfWidth, normalizedPhase) {
   if (!state.anim) {
     state.anim = inner.animate(
       [{ transform: `translateX(${fromX}px)` }, { transform: `translateX(${toX}px)` }],
-      { duration: durationMs, iterations: Infinity, easing: `steps(${pxSteps}, end)` }
+      { duration: durationMs, iterations: Number.POSITIVE_INFINITY, easing: `steps(${pxSteps}, end)` }
     );
     state.anim.currentTime = phaseTime;
   } else {
@@ -265,7 +264,7 @@ function ensureAnimation(state, halfWidth, normalizedPhase) {
     );
     state.anim.effect.updateTiming({
       duration: durationMs,
-      iterations: Infinity,
+      iterations: Number.POSITIVE_INFINITY,
       easing: `steps(${pxSteps}, end)`
     });
     state.anim.currentTime = phaseTime; // resume exactly on an integer-px step

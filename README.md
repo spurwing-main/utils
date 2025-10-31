@@ -42,7 +42,7 @@ Version-pinned (recommended):
 
 ```html
 <script type="module"
-src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.13/loader.js"
+src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.25/loader.js"
 data-features="video"
 data-debug="loader">
 </script>
@@ -55,7 +55,7 @@ Latest tag (auto-updating; not recommended for production stability):
   data-features="video"></script>
 ```
 
-Update the `@0.1.13` segment when publishing a new release; the exported `VERSION` constant mirrors [`package.json`](package.json).
+Update the `@0.1.25` segment when publishing a new release; the exported `VERSION` constant mirrors [`package.json`](package.json).
 
 ## Publishing (CI)
 
@@ -91,14 +91,14 @@ The marquee feature provides automatic discovery of marquee elements via attribu
 ```html
 <script type="module" src="/loader.js" data-features="marquee"></script>
 
-<!-- Basic marquee with default speed (1px per frame at 60fps) -->
+<!-- Basic marquee with default speed (100 px/s) -->
 <div data-marquee>
   <span>Your content here</span>
   <span>More content</span>
 </div>
 
-<!-- Custom speed marquee (3px per frame at 60fps) -->
-<div data-marquee data-marquee-speed="3">
+<!-- Custom speed marquee (180 px/s) -->
+<div data-marquee data-marquee-speed="180">
   <span>Fast content</span>
 </div>
 
@@ -119,6 +119,7 @@ The marquee feature provides automatic discovery of marquee elements via attribu
 
 **Key Features:**
 - Attribute-based configuration with `data-marquee` and `data-marquee-speed`
+- Optional `data-marquee-direction="left|right"` and `data-marquee-pause-on-hover`
 - Automatic discovery via `init()` and `rescan()`
 - Globally accessible via `window.Marquee` after initialization
 - Consistent pixel-based speed across all marquees

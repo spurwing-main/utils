@@ -1,6 +1,6 @@
 # Marquee Feature
 
-A standalone module for creating smooth, endless scrolling marquees using CSS keyframes. It uses modern JavaScript, modern CSS, and modern Web APIs targeting evergreen browsers.
+A standalone module for creating smooth, endless scrolling marquees using the Web Animations API (WAAPI). It uses compositor‑friendly transforms, pixel‑quantized step easing, and modern Web APIs targeting evergreen browsers.
 
 ## Overview
 
@@ -8,16 +8,16 @@ The marquee feature makes marked containers scroll their content smoothly and en
 
 ## Features
 
-- **Attribute-Based**: Uses `data-marquee` with optional `data-marquee-direction`, `data-marquee-speed`, and `data-marquee-pause-on-hover`
-- **Automatic Discovery**: `init()` and `rescan()` automatically find and manage elements
-- **Scoped Rescans**: `rescan(root)` only touches marquees inside the provided root (or the whole document by default)
-- **CSS Keyframes**: Uses compositor-friendly `transform` animations with a unique keyframe per marquee
-- **Consistent Speed**: Speed is expressed in pixels per second (px/s)
-- **Attribute-Aware**: Speed/direction/hover updates react immediately; removing the attribute detaches the instance automatically
-- **Seamless Looping**: Content is duplicated to ensure a jump‑free, continuous scroll
-- **Motion Preferences**: Honors `prefers-reduced-motion`; animation stops immediately when reduction is requested
-- **Adaptive**: Uses `ResizeObserver` and mutation observers to react to size/attribute changes
-- **Clean Cleanup**: Restores the exact DOM nodes (including event listeners) and releases all resources when detached
+- **Attribute‑based**: `data-marquee` with optional `data-marquee-direction`, `data-marquee-speed`, and `data-marquee-pause-on-hover`
+- **Automatic discovery**: `init()` and `rescan()` automatically find and manage elements
+- **Scoped rescans**: `rescan(root)` only touches marquees inside the provided root
+- **WAAPI animation**: Compositor‑only `transform: translateX` with `steps()` easing for pixel‑accurate motion
+- **Consistent speed**: Expressed in pixels per second (px/s)
+- **Attribute‑aware**: Speed/direction/hover updates react immediately; removing the attribute detaches the instance automatically
+- **Seamless looping**: Content is duplicated to ensure a jump‑free, continuous scroll
+- **Motion preferences**: Honors `prefers-reduced-motion`; animation stops immediately when reduction is requested
+- **Adaptive**: Uses `ResizeObserver` and `MutationObserver` to react to size/attribute changes
+- **Clean cleanup**: Restores the exact DOM nodes (including event listeners) and releases all resources when detached
 
 ## Usage
 
@@ -87,7 +87,7 @@ Marquee.rescan(section);
 
 ### `Marquee.attach(element)`
 
-Manually attach marquee to a specific element. Reads speed from `data-marquee-speed` attribute.
+Manually attach marquee to a specific element. Reads configuration from attributes (e.g., `data-marquee-speed`).
 
 **Parameters:**
 - `element` (HTMLElement): The element to attach marquee to
@@ -119,7 +119,7 @@ Sets the animation speed in pixels per second. Higher values = faster scrolling.
 
 - Default: `100` (100 px/s)
 - Valid range: Any positive number
-- Speed is consistent across marquees - same value means same visual speed
+- Consistent across marquees: same value → same visual speed
 
 ```html
 <!-- Slow -->
@@ -130,6 +130,7 @@ Sets the animation speed in pixels per second. Higher values = faster scrolling.
 
 <!-- Fast -->
 <div data-marquee data-marquee-speed="240">Fast content</div>
+```
 
 ### `data-marquee-direction`
 
@@ -140,8 +141,6 @@ Sets the scroll direction.
 ### `data-marquee-pause-on-hover`
 
 Pauses the animation while hovering the marquee container (attribute presence enables it).
-
-```
 
 
 ## Speed Calculation
@@ -172,29 +171,27 @@ Example:
 
 1. **Init**: `init()` is called (automatically by loader or manually)
 2. **Discovery**: Scans for `[data-marquee]` elements
-3. **Attachment**: Creates animation instance for each element
-4. **Animation**: Smoothly scrolls content using CSS keyframes (`transform: translateX`)
+3. **Attachment**: Builds internal structure and animation instance for each element
+4. **Animation**: Smoothly scrolls content using WAAPI (`inner.animate` with `transform: translateX` and `steps()` easing)
 5. **Rescan**: Call `rescan()` when adding/removing elements
-6. **Detachment**: Removes animation and restores original DOM
+6. **Detachment**: Cancels animation and restores original DOM
 
 ## How It Works
 
 1. **Preparation**: When attached:
-   - Saves original nodes and wraps them inside a single `marquee-inner > [data-marquee-cycle]`
-   - Duplicates the content as many times as needed to exceed 2× the container width
-   - Sets container to `display: flex; overflow: hidden` and inner to `display: flex; width: max-content`
+   - Saves original nodes and wraps them inside an `inner` container split into two halves: `halfA` and `halfB`
+   - `halfA` contains the original unit plus clean clones until width exceeds the container
+   - `halfB` mirrors `halfA` so translation by exactly one half yields a seamless loop
+   - Clones are marked `aria-hidden` and `inert`; internal wrappers inherit `gap` from the container
 
-2. **Animation**: Uses a unique `@keyframes` per marquee to translate by half the total content width, looping seamlessly.
+2. **Animation**: Creates a WAAPI animation on the `inner` element that translates by one half-width using `steps(px, end)` for pixel-accurate motion. Iterates indefinitely.
 
-3. **Adaptation**: Uses `ResizeObserver`, mutation observers, and font/image readiness to re-measure and adjust clones and animation.
+3. **Adaptation**: Uses `ResizeObserver`, `MutationObserver`, font readiness, and image load/error events to re‑measure and adjust clones and animation timing.
 
 4. **Cleanup**: When detached:
-   - Cancels animation frame
-   - Restores original nodes (so existing event listeners remain intact)
-   - Restores original display and overflow styles
-   - Removes grid styling
-   - Disconnects observers
-   - Releases all resources
+   - Cancels the WAAPI animation
+   - Restores original nodes (existing event listeners remain intact)
+   - Disconnects observers and releases all resources
 
 ## Browser Compatibility
 
