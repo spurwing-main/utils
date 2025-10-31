@@ -263,6 +263,7 @@ function createInstance(container) {
   container.style.display = "grid";
   container.style.gridTemplateColumns = "100%";
   container.style.contain = "layout style paint";
+  container.style.pointerEvents = "none";
   container.style.transform = "translateZ(0)"; // Force GPU acceleration on container
   container.append(wrapper);
 
