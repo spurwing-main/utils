@@ -4,6 +4,16 @@ const DBG = typeof window !== "undefined"
 let initialized = false;
 const instances = new Map();
 
+// Centralized guard for operations that may throw.
+function safe(label, fn) {
+  try {
+    fn();
+  } catch (error) {
+    // POLICY: guard non-critical failures with debug logging only
+    DBG?.warn?.(label, error);
+  }
+}
+
 function readSpeed(el) {
   const raw = el.getAttribute("data-marquee-speed");
   const val = Number.parseFloat(raw);
@@ -16,11 +26,9 @@ function getCycleGap(container) {
   // 1) data-marquee-gap (number, px)
   // 2) computed gap/column-gap from the marquee container (so authors can style the host)
   // 3) 0 as a safe default
-  try {
-    const fromAttr = container?.getAttribute?.("data-marquee-gap");
-    const parsed = Number.parseFloat(fromAttr);
-    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
-  } catch (_) {}
+  const fromAttr = container?.getAttribute?.("data-marquee-gap");
+  const parsed = Number.parseFloat(fromAttr);
+  if (Number.isFinite(parsed) && parsed >= 0) return parsed;
 
   if (!container || typeof window === "undefined" || !window.getComputedStyle) return 0;
   const style = window.getComputedStyle(container);
@@ -32,10 +40,10 @@ function getCycleGap(container) {
 function cleanClone(node) {
   // Only decorate element nodes; text/comments don't support attributes
   if (node && node.nodeType === 1) {
-    try { node.setAttribute("data-marquee-clone", "true"); } catch (_) {}
-    try { node.setAttribute("aria-hidden", "true"); } catch (_) {}
-    try { node.setAttribute("inert", ""); } catch (_) {}
-    try { node.removeAttribute("id"); } catch (_) {}
+    safe("clone: set data-marquee-clone", () => node.setAttribute("data-marquee-clone", "true"));
+    safe("clone: set aria-hidden", () => node.setAttribute("aria-hidden", "true"));
+    safe("clone: set inert", () => node.setAttribute("inert", ""));
+    safe("clone: remove id", () => node.removeAttribute("id"));
   }
 }
 
@@ -45,33 +53,29 @@ function removeClones(state) {
 }
 
 function addClones(state) {
-  if (!state.originals.length) return;
+  if (!state.originals.length || !state.cycle) return;
   const containerW = state.container.clientWidth || 0;
-  // Generate enough clones to cover viewport + buffer cycles
+  // Ensure enough whole cycles to cover viewport in both directions
   let needed = Math.ceil((containerW / (state.loopWidth || 1))) + 2;
   if (!Number.isFinite(needed) || needed < 3) needed = 3;
-  
+
   const fragBefore = document.createDocumentFragment();
   const fragAfter = document.createDocumentFragment();
-  
-  // Add one set of clones BEFORE originals to prevent left-side disappearance
-  for (const node of state.originals) {
-    const clone = node.cloneNode(true);
-    cleanClone(clone);
-    fragBefore.append(clone);
-    state.clones.push(clone);
-  }
-  
-  // Add multiple sets AFTER originals for scrolling
+
+  // Prepend exactly one full cycle to avoid left-edge disappearance
+  const before = state.cycle.cloneNode(true);
+  cleanClone(before);
+  fragBefore.append(before);
+  state.clones.push(before);
+
+  // Append multiple full cycles based on viewport coverage
   for (let i = 0; i < needed; i++) {
-    for (const node of state.originals) {
-      const clone = node.cloneNode(true);
-      cleanClone(clone);
-      fragAfter.append(clone);
-      state.clones.push(clone);
-    }
+    const after = state.cycle.cloneNode(true);
+    cleanClone(after);
+    fragAfter.append(after);
+    state.clones.push(after);
   }
-  
+
   state.wrapper.prepend(fragBefore);
   state.wrapper.append(fragAfter);
 }
@@ -83,28 +87,41 @@ function refresh(state) {
 
   // Resolve host-defined cycle gap and apply it to the flex wrapper (between cycles).
   const gap = getCycleGap(state.container);
-  if (gap > 0) {
-    state.wrapper.style.columnGap = `${gap}px`;
-    state.wrapper.style.gap = `${gap}px`;
+  // Snap gap to whole pixels to avoid fractional cycle widths that cause visible seams
+  const gapPx = gap > 0 ? Math.round(gap) : 0;
+  if (gapPx > 0) {
+    state.wrapper.style.columnGap = `${gapPx}px`;
+    state.wrapper.style.gap = `${gapPx}px`;
   } else {
     state.wrapper.style.columnGap = "";
     state.wrapper.style.gap = "";
   }
 
-  // loopWidth is measured from the original content width plus one cycle gap.
-  // This is independent of the container width to prevent jitter on container resizes.
-  state.loopWidth = state.wrapper.scrollWidth + gap;
+  // loopWidth equals one full cycle width (originals only) plus one inter-cycle gap.
+  // Measure the cycle element directly to avoid counting clones.
+  let cycleWidth = 0;
+  try {
+    const rect = state.cycle?.getBoundingClientRect?.();
+    if (rect && Number.isFinite(rect.width)) cycleWidth = rect.width;
+  } catch (error) {
+    DBG?.warn?.("refresh: measure cycle failed", error);
+  }
+  const fallbackCycle = state.cycle?.scrollWidth || 0;
+  const resolvedCycle = Math.max(fallbackCycle, Math.ceil(cycleWidth));
+  state.loopWidth = Math.max(1, Math.round(resolvedCycle + gapPx));
   state.speed = readSpeed(state.container);
   state.pixelsPerMs = (state.speed * 60) / 1000;
-  
+
   // Normalize progress to avoid jumps during refresh
   const normalizedProgress = progress - Math.floor(progress);
-  // Start offset at loopWidth (past the prepended clones, at the originals position)
-  state.offset = normalizedProgress * state.loopWidth + state.loopWidth;
+  // Start offset at loopWidth (past the prepended cycle clone, aligned to originals)
+  state.offset = Math.round(normalizedProgress * state.loopWidth + state.loopWidth);
 
   addClones(state);
   const roundedOffset = Math.round(state.offset);
-  state.wrapper.style.transform = `translate3d(${-roundedOffset}px,0,0)`;
+  const dir = state.direction;
+  const sign = dir === "right" ? 1 : -1;
+  state.wrapper.style.transform = `translate3d(${sign * roundedOffset}px,0,0)`;
 }
 
 function startAnimation(state) {
@@ -135,8 +152,10 @@ function startAnimation(state) {
       return;
     }
 
-    state.offset += state.pixelsPerMs * delta;
-    
+    if (!state.paused) {
+      state.offset += state.pixelsPerMs * delta;
+    }
+
     // Wrap when offset exceeds 2*loopWidth (we start at loopWidth, so we wrap back to loopWidth)
     while (state.offset >= state.loopWidth * 2) {
       state.offset -= state.loopWidth;
@@ -144,7 +163,9 @@ function startAnimation(state) {
 
     // Round to nearest pixel to prevent sub-pixel jitter
     const roundedOffset = Math.round(state.offset);
-    state.wrapper.style.transform = `translate3d(${-roundedOffset}px,0,0)`;
+    const dir = state.direction;
+    const sign = dir === "right" ? 1 : -1;
+    state.wrapper.style.transform = `translate3d(${sign * roundedOffset}px,0,0)`;
     const raf = (typeof window !== "undefined" && window.requestAnimationFrame) ? window.requestAnimationFrame.bind(window) : (cb) => setTimeout(() => cb(Date.now()), 0);
     state.animationId = raf(step);
   };
@@ -184,8 +205,13 @@ function createInstance(container) {
   wrapper.style.cssText =
     "display:flex;white-space:nowrap;transform:translateZ(0);backface-visibility:hidden;perspective:1000px;will-change:transform;grid-area:1/1;width:max-content;overflow:visible;flex-shrink:0;contain:layout style;pointer-events:none";
 
+  // Build a single cycle element that wraps all original nodes.
+  const cycle = document.createElement("div");
+  cycle.setAttribute("data-marquee-cycle", "true");
+  cycle.style.cssText = "display:flex;white-space:nowrap;width:max-content;flex-shrink:0";
   const originals = Array.from(container.childNodes);
-  for (const node of originals) wrapper.append(node);
+  for (const node of originals) cycle.append(node);
+  wrapper.append(cycle);
 
   const gap = getCycleGap(container);
   if (gap > 0) {
@@ -194,6 +220,9 @@ function createInstance(container) {
   }
 
   const speed = readSpeed(container);
+  const directionAttr = (container.getAttribute("data-marquee-direction") || "left").toLowerCase();
+  const direction = directionAttr === "right" ? "right" : "left";
+  const pauseOnHover = container.hasAttribute("data-marquee-pause-on-hover");
   const reducedMotion =
     typeof window !== "undefined" && window.matchMedia
       ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -202,6 +231,7 @@ function createInstance(container) {
   const state = {
     container,
     wrapper,
+    cycle,
     originals,
     clones: [],
     speed,
@@ -212,6 +242,9 @@ function createInstance(container) {
     lastTick: null,
     reducedMotion,
     refreshPending: false,
+    paused: false,
+    direction,
+    pauseOnHover,
     resizeObserver: null,
     lastObservedWidth: container.clientWidth || 0,
     lastObservedHeight: container.clientHeight || 0,
@@ -233,13 +266,22 @@ function createInstance(container) {
   container.style.transform = "translateZ(0)"; // Force GPU acceleration on container
   container.append(wrapper);
 
+  // Optional pause-on-hover behavior
+  if (pauseOnHover) {
+    container.addEventListener("mouseenter", () => { state.paused = true; }, { passive: true });
+    container.addEventListener("mouseleave", () => { state.paused = false; }, { passive: true });
+  }
+
   // Remeasure on font load and image load events
   try {
     const docFonts = document?.fonts;
     if (docFonts?.ready && typeof docFonts.ready.then === "function") {
       docFonts.ready.then(() => scheduleRefresh(state));
     }
-  } catch (_) {}
+  } catch (error) {
+    // POLICY: fonts API unsupported; skip font-based refresh hook
+    DBG?.info?.("fonts.ready not available", error);
+  }
 
   try {
     const imgs = wrapper.querySelectorAll?.("img");
@@ -249,7 +291,10 @@ function createInstance(container) {
         img.addEventListener?.("error", () => scheduleRefresh(state), { once: true });
       }
     }
-  } catch (_) {}
+  } catch (error) {
+    // POLICY: image hooks not critical; marquee will still refresh via observers
+    DBG?.warn?.("image listeners failed", error);
+  }
 
   if (typeof window !== "undefined" && window.ResizeObserver) {
     state.resizeObserver = new window.ResizeObserver((entries) => {
@@ -274,24 +319,25 @@ function createInstance(container) {
 
   const Obs = (typeof window !== "undefined" && window.MutationObserver) ? window.MutationObserver : null;
   if (Obs) {
-  const mutObs = new Obs((mutations) => {
-    for (const mut of mutations) {
-      for (const node of mut.addedNodes) {
-        if (!node.hasAttribute?.("data-marquee-clone")) {
-          scheduleRefresh(state);
-          return;
+    const mutObs = new Obs((mutations) => {
+      for (const mut of mutations) {
+        for (const node of mut.addedNodes) {
+          if (!node.hasAttribute?.("data-marquee-clone")) {
+            scheduleRefresh(state);
+            return;
+          }
+        }
+        for (const node of mut.removedNodes) {
+          if (state.originals.includes(node)) {
+            scheduleRefresh(state);
+            return;
+          }
         }
       }
-      for (const node of mut.removedNodes) {
-        if (state.originals.includes(node)) {
-          scheduleRefresh(state);
-          return;
-        }
-      }
-    }
-  });
-  mutObs.observe(container, { childList: true, subtree: false });
-  state.mutationObserver = mutObs;
+    });
+    // Observe direct children of the cycle to react to content edits.
+    mutObs.observe(state.cycle, { childList: true, subtree: false });
+    state.mutationObserver = mutObs;
   }
 
   if (typeof window !== "undefined" && window.matchMedia) {
@@ -301,7 +347,7 @@ function createInstance(container) {
       if (state.reducedMotion) {
         stopAnimation(state);
         state.offset = 0;
-        state.wrapper.style.transform = "translateX(0)";
+        state.wrapper.style.transform = "translate3d(0,0,0)";
       } else {
         scheduleRefresh(state);
         startAnimation(state);
@@ -326,9 +372,7 @@ function createInstance(container) {
 
 function attach(container) {
   if (container?.nodeType !== 1) {
-    try {
-      DBG?.warn("invalid container");
-    } catch (_) {}
+    DBG?.warn?.("invalid container");
     return;
   }
 
@@ -344,9 +388,7 @@ function attach(container) {
     const state = createInstance(container);
     instances.set(container, state);
   } catch (error) {
-    try {
-      DBG?.error("attach failed", error);
-    } catch (_) {}
+    DBG?.error?.("attach failed", error);
   }
 }
 
