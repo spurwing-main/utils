@@ -58,7 +58,7 @@ function createStructure(container) {
   const outer = container;
   Object.assign(outer.style, {
     overflow: "hidden",
-    display: "block",
+    display: "flex",
     contain: "layout paint style",
   });
 
@@ -74,7 +74,7 @@ function cleanClone(node) {
 }
 
 function readTranslateX(el) {
-  const t = getComputedStyle(el).transform || "";
+  const t = (typeof window !== "undefined" ? window.getComputedStyle?.(el)?.transform : "") || "";
   if (t === "none") return 0;
   const m = t.match(/^matrix\(([^)]+)\)$/);
   if (m) return Number.parseFloat(m[1].split(",")[4]) || 0;
@@ -96,13 +96,17 @@ function attach(container) {
   const id = genId();
   const settings = readSettings(container);
   const { inner, halfA, halfB, unitOriginal, originals } = createStructure(container);
+  const originalStyle = container.getAttribute("style");
 
-  const ac = new AbortController();
+  const ac = (typeof window !== "undefined" && window.AbortController)
+    ? new window.AbortController()
+    : new AbortController();
   const signal = ac.signal;
   const reducedQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   const state = {
     id, container, inner, halfA, halfB, unitOriginal, originals,
+    originalStyle,
     settings,
     reducedMotion: !!reducedQuery.matches,
     reducedQuery, ac, signal,
@@ -151,7 +155,17 @@ function detach(container) {
   try {
     for (const n of state.originals) state.container.appendChild(n);
     state.inner.remove();
-  } catch { }
+  } catch (_error) {
+    // POLICY: contain failures; attempt best-effort cleanup without throwing
+  }
+  if (state.originalStyle == null) {
+    // Explicitly reset inline styles we set
+    state.container.style.overflow = "visible";
+    state.container.style.display = "";
+    state.container.style.contain = "";
+  } else {
+    state.container.setAttribute("style", state.originalStyle);
+  }
   instances.delete(container);
 }
 
@@ -206,11 +220,18 @@ function buildHalves(state) {
     baseWidth = unitOriginal.scrollWidth;
   }
 
+  // Add clones until the half exceeds container width; guard against no-layout envs
+  let guard = 0;
+  let lastWidth = halfA.scrollWidth | 0;
   while (halfA.scrollWidth < minHalf) {
     const c = cleanClone(unitOriginal);
     c.setAttribute("aria-hidden", "true");
     c.setAttribute("inert", "");
     halfA.appendChild(c);
+    guard += 1;
+    const w = halfA.scrollWidth | 0;
+    if (w <= lastWidth || guard > 32) break; // safety: jsdom may keep scrollWidth at 0
+    lastWidth = w;
   }
 
   // Rebuild B as mirror of A
