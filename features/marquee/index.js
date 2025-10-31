@@ -1,321 +1,303 @@
-const DBG = typeof window !== "undefined"
-  ? window.__UTILS_DEBUG__?.createLogger?.("marquee")
-  : undefined;
+// marquee.pixelperfect.js — WAAPI, pixel-quantized, no fallbacks
 
-let initialized = false;
 const instances = new Map();
+let initialized = false;
 
-// Guard utility for safe ops
-function safe(label, fn) {
-  try {
-    return fn();
-  } catch (error) {
-    DBG?.warn?.(label, error);
-    return undefined;
-  }
+function $(sel, ctx = document) { return Array.from(ctx.querySelectorAll(sel)); }
+function genId() { return `mq-${Math.random().toString(36).slice(2, 10)}`; }
+
+function readSettings(el) {
+  const dir = (el.getAttribute("data-marquee-direction") || "left").toLowerCase();
+  const speedRaw = el.getAttribute("data-marquee-speed");
+  const speed = Number.isFinite(parseFloat(speedRaw)) && parseFloat(speedRaw) > 0 ? parseFloat(speedRaw) : 100; // px/s
+  const pauseOnHover = el.hasAttribute("data-marquee-pause-on-hover");
+  return { direction: dir === "right" ? "right" : "left", speed, pauseOnHover };
 }
 
 function queryTargets(root) {
   const set = new Set();
   for (const el of root.querySelectorAll?.("[data-marquee]") || []) set.add(el);
-  if (root !== document && root?.nodeType === 1) {
-    if (root.hasAttribute?.("data-marquee")) set.add(root);
-  }
+  if (root !== document && root?.nodeType === 1 && root.hasAttribute?.("data-marquee")) set.add(root);
   return set;
 }
 
-function generateId() {
-  return `marquee-${Math.random().toString(36).slice(2, 11)}`;
+function deepRemoveIds(el) {
+  if (el.nodeType !== 1) return;
+  el.removeAttribute("id");
+  for (const n of el.children) deepRemoveIds(n);
 }
 
-function readSettings(container) {
-  const defaultSpeed = 100; // px per second
-  const directionRaw = (container.getAttribute("data-marquee-direction") || "left").toLowerCase();
-  const direction = directionRaw === "right" ? "right" : "left";
-  const speedRaw = container.getAttribute("data-marquee-speed");
-  const speedParsed = Number.parseFloat(speedRaw ?? "");
-  const speed = Number.isFinite(speedParsed) && speedParsed > 0 ? speedParsed : defaultSpeed;
-  const pauseOnHover = container.hasAttribute("data-marquee-pause-on-hover");
-  return { direction, speed, pauseOnHover };
-}
-
-function ensureStructure(container) {
-  // Build inner wrapper and a single original cycle node
-  const inner = document.createElement("div");
-  inner.style.display = "flex";
-  inner.style.gap = "inherit";
-  inner.style.flexWrap = "nowrap";
-  inner.style.width = "max-content";
-  inner.style.backfaceVisibility = "hidden";
-  inner.style.perspective = "1000px";
-  inner.style.willChange = "transform";
-
-  const cycle = document.createElement("div");
-  cycle.setAttribute("data-marquee-cycle", "true");
-  cycle.style.display = "flex";
-  cycle.style.width = "max-content";
-  cycle.style.flexShrink = "0";
-  cycle.style.gap = "inherit";
-  cycle.style.flexWrap = "nowrap";
-
+function createStructure(container) {
   const originals = Array.from(container.childNodes);
-  for (const node of originals) cycle.append(node);
-  inner.append(cycle);
-  
-  // Surface styles (no pointer-events suppression to keep content interactive)
-  container.style.display = "flex";
-  container.style.overflow = "hidden";
-  container.style.contain = "layout paint style";
-  // Isolate inner for smooth compositing
-  inner.style.contain = "layout paint style";
-  inner.style.transform = "translateZ(0)";
 
-  container.append(inner);
-  return { inner, cycle, originals };
-}
+  const inner = document.createElement("div");
+  Object.assign(inner.style, {
+    display: "flex",
+    flexWrap: "nowrap",
+    width: "max-content",
+    gap: "inherit",
+    willChange: "transform",
+    transform: "translateX(0px)",
+    contain: "paint style layout",
+    isolation: "isolate",
+  });
 
-function clearClones(state) {
-  // Keep the first child as the original cycle
-  const { inner, cycle } = state;
-  for (const child of Array.from(inner.children)) {
-    if (child !== cycle) child.remove();
-  }
+  const halfA = document.createElement("div");
+  Object.assign(halfA.style, { display: "flex", flexWrap: "nowrap", width: "max-content", gap: "inherit" });
+
+  const unitOriginal = document.createElement("div");
+  Object.assign(unitOriginal.style, { display: "flex", flexWrap: "nowrap", width: "max-content", gap: "inherit" });
+  for (const n of originals) unitOriginal.appendChild(n);
+
+  halfA.appendChild(unitOriginal);
+
+  const halfB = document.createElement("div");
+  Object.assign(halfB.style, { display: "flex", flexWrap: "nowrap", width: "max-content", gap: "inherit" });
+  halfB.setAttribute("aria-hidden", "true");
+  halfB.setAttribute("inert", "");
+
+  const outer = container;
+  Object.assign(outer.style, {
+    overflow: "hidden",
+    display: "block",
+    contain: "layout paint style",
+  });
+
+  inner.append(halfA, halfB);
+  outer.append(inner);
+  return { inner, halfA, halfB, unitOriginal, originals };
 }
 
 function cleanClone(node) {
-  if (node && node.nodeType === 1) {
-    safe("clone: mark", () => node.setAttribute("data-marquee-clone", "true"));
-    safe("clone: aria-hidden", () => node.setAttribute("aria-hidden", "true"));
-    safe("clone: inert", () => node.setAttribute("inert", ""));
-    safe("clone: remove id", () => node.removeAttribute("id"));
-  }
+  const clone = node.cloneNode(true);
+  deepRemoveIds(clone);
+  return clone;
 }
 
-function cloneChildrenOnce(el) {
-  const frag = document.createDocumentFragment();
-  for (const child of Array.from(el.children)) {
-    const c = child.cloneNode(true);
-    cleanClone(c);
-    frag.append(c);
-  }
-  return frag;
+function readTranslateX(el) {
+  const t = getComputedStyle(el).transform || "";
+  if (t === "none") return 0;
+  const m = t.match(/^matrix\(([^)]+)\)$/);
+  if (m) return parseFloat(m[1].split(",")[4]) || 0;
+  const m3 = t.match(/^matrix3d\(([^)]+)\)$/);
+  if (m3) return parseFloat(m3[1].split(",")[12]) || 0;
+  return 0;
 }
 
-function injectKeyframes(state, totalWidth) {
-  const { id, settings } = state;
-  const half = totalWidth / 2; // exact float to avoid seam rounding
-  const fromX = settings.direction === "left" ? 0 : -half;
-  const toX = settings.direction === "left" ? -half : 0;
-  const css = `@keyframes ${id} {\n  from { transform: translate3d(${fromX}px,0,0); }\n  to { transform: translate3d(${toX}px,0,0); }\n}`;
-  const head = document.head || document.getElementsByTagName("head")[0];
-  if (!head) return;
-  const prev = document.getElementById(`${id}-style`);
-  if (prev) prev.remove();
-  const style = document.createElement("style");
-  style.id = `${id}-style`;
-  style.textContent = css;
-  head.append(style);
-}
-
-function applyAnimation(state, totalWidth) {
-  const { inner, settings } = state;
-  const half = Math.max(1, totalWidth / 2); // exact float distance
-  const durationMs = Math.max(1, Math.round((half / settings.speed) * 1000));
-  injectKeyframes(state, totalWidth);
-  inner.style.animation = `${state.id} ${durationMs}ms linear infinite`;
-}
-
-function removeAnimation(state) {
-  safe("remove animation style tag", () => document.getElementById(`${state.id}-style`)?.remove());
-  state.inner.style.animation = "none";
-}
-
-function update(state) {
-
-  clearClones(state);
-
-  // Ensure content repeats at least to 2x container width
-  const containerWidth = Math.ceil(state.container.getBoundingClientRect().width || 0);
-  // Always ensure at least two identical halves by doubling once when needed
-  if (state.inner.children.length < 2) {
-    state.inner.append(cloneChildrenOnce(state.inner));
-  }
-  let contentWidth = state.inner.scrollWidth;
-  // Continue doubling until content comfortably covers 2x the container width
-  while (contentWidth < containerWidth * 2) {
-    state.inner.append(cloneChildrenOnce(state.inner));
-    contentWidth = state.inner.scrollWidth;
-  }
-
-  // No external interaction hooks
-
-  // Honor prefers-reduced-motion
-  if (state.reducedMotion) {
-    removeAnimation(state);
-    return;
-  }
-
-  const totalWidth = state.inner.scrollWidth;
-  applyAnimation(state, totalWidth);
-}
-
-function addHoverHandlers(state) {
-  if (!state.settings.pauseOnHover) return;
-  const onEnter = () => { state.inner.style.animationPlayState = "paused"; };
-  const onLeave = () => { state.inner.style.animationPlayState = "running"; };
-  state._hoverEnter = onEnter;
-  state._hoverLeave = onLeave;
-  state.container.addEventListener("mouseenter", onEnter, { passive: true });
-  state.container.addEventListener("mouseleave", onLeave, { passive: true });
-}
-
-function removeHoverHandlers(state) {
-  if (!state._hoverEnter || !state._hoverLeave) return;
-  state.container.removeEventListener("mouseenter", state._hoverEnter);
-  state.container.removeEventListener("mouseleave", state._hoverLeave);
-  state._hoverEnter = undefined;
-  state._hoverLeave = undefined;
+function scheduleUpdate(state) {
+  if (state._scheduled) return;
+  state._scheduled = true;
+  queueMicrotask(() => { state._scheduled = false; update(state); });
 }
 
 function attach(container) {
-  if (container?.nodeType !== 1) return;
-  if (instances.has(container)) {
-    // Refresh settings and animation
-    const state = instances.get(container);
-    state.settings = readSettings(container);
-    removeHoverHandlers(state);
-    addHoverHandlers(state);
-    update(state);
-    return;
-  }
+  if (!container || container.nodeType !== 1) return;
+  if (instances.has(container)) { refresh(instances.get(container)); return; }
 
-  try {
-    const id = generateId();
-    const settings = readSettings(container);
-    // Capture original styles before mutation
-    const originalOverflow = container.style.overflow;
-    const originalDisplay = container.style.display;
-    const { inner, cycle, originals } = ensureStructure(container);
-    const reducedMotion = typeof window !== "undefined" && window.matchMedia
-      ? !!window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      : false;
+  const id = genId();
+  const settings = readSettings(container);
+  const { inner, halfA, halfB, unitOriginal, originals } = createStructure(container);
 
-    const state = {
-      id,
-      container,
-      inner,
-      cycle,
-      originals,
-      settings,
-      reducedMotion,
-      resizeObserver: null,
-      mutationObserver: null,
-      motionQuery: null,
-      motionHandler: null,
-      originalOverflow,
-      originalDisplay,
-    };
+  const ac = new AbortController();
+  const signal = ac.signal;
+  const reducedQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-    // Observe container size changes (modern browsers only)
-    if (typeof window !== "undefined" && window.ResizeObserver) {
-      state.resizeObserver = new window.ResizeObserver(() => update(state));
-      state.resizeObserver.observe(container);
-    }
+  const state = {
+    id, container, inner, halfA, halfB, unitOriginal, originals,
+    settings,
+    reducedMotion: !!reducedQuery.matches,
+    reducedQuery, ac, signal,
+    anim: null,
+    metrics: { halfWidth: 0, durationMs: 0 },
+    _scheduled: false,
+    resizeObserver: null,
+    mutationObserver: null,
+  };
 
-    // Watch style + data-marquee-* attributes like the reference
-    const Obs = (typeof window !== "undefined" && window.MutationObserver) ? window.MutationObserver : null;
-    if (Obs) {
-      state.mutationObserver = new Obs((mutations) => {
-        for (const m of mutations) {
-          if (m.attributeName === "style") { update(state); return; }
-          if (m.attributeName && /^data-marquee/.test(m.attributeName)) { update(state); return; }
-        }
-      });
-      state.mutationObserver.observe(container, { attributes: true, attributeFilter: [
-        "style",
-        "data-marquee-speed","data-marquee-direction","data-marquee-pause-on-hover",
-      ] });
-    }
+  state.resizeObserver = new ResizeObserver(() => scheduleUpdate(state));
+  state.resizeObserver.observe(container);
 
-    // Fonts and image loads can change measurements
-    safe("fonts.ready", () => document?.fonts?.ready?.then?.(() => update(state)));
-    try {
-      for (const img of state.inner.querySelectorAll?.("img") || []) {
-        if (!img.complete) {
-          img.addEventListener("load", () => update(state), { once: true });
-          img.addEventListener("error", () => update(state), { once: true });
-        }
+  state.mutationObserver = new MutationObserver((muts) => {
+    for (const m of muts) {
+      if (/^data-marquee/.test(m.attributeName)) {
+        state.settings = readSettings(container);
+        scheduleUpdate(state);
+        return;
       }
-    } catch (error) {
-      DBG?.warn?.("image listeners failed", error);
     }
+  });
+  state.mutationObserver.observe(container, {
+    attributes: true,
+    attributeFilter: ["data-marquee-speed", "data-marquee-direction", "data-marquee-pause-on-hover"],
+  });
 
-    // Prefers-reduced-motion updates
-    if (typeof window !== "undefined" && window.matchMedia) {
-      const q = window.matchMedia("(prefers-reduced-motion: reduce)");
-      const handler = () => { state.reducedMotion = q.matches; update(state); };
-      q.addEventListener("change", handler);
-      state.motionQuery = q;
-      state.motionHandler = handler;
-    }
+  reducedQuery.addEventListener("change", () => {
+    state.reducedMotion = reducedQuery.matches;
+    scheduleUpdate(state);
+  }, { signal });
 
-    addHoverHandlers(state);
-
-    instances.set(container, state);
-    update(state);
-  } catch (error) {
-    DBG?.error?.("attach failed", error);
-  }
+  document.fonts?.ready?.then?.(() => scheduleUpdate(state));
+  addHoverHandlers(state);
+  instances.set(container, state);
+  update(state);
 }
 
 function detach(container) {
   const state = instances.get(container);
   if (!state) return;
-
-  // Remove observers
-  if (state.resizeObserver) state.resizeObserver.disconnect();
-  if (state.mutationObserver) state.mutationObserver.disconnect();
-  if (state.motionQuery && state.motionHandler) state.motionQuery.removeEventListener("change", state.motionHandler);
-
-  removeHoverHandlers(state);
-  removeAnimation(state);
-
-  // Restore DOM
+  state.resizeObserver?.disconnect();
+  state.mutationObserver?.disconnect();
+  state.ac.abort();
+  state.anim?.cancel?.();
   try {
-    for (const node of state.originals) container.append(node);
+    for (const n of state.originals) state.container.appendChild(n);
     state.inner.remove();
-    container.style.overflow = state.originalOverflow ?? "";
-    container.style.display = state.originalDisplay ?? "";
-  } catch (error) {
-    DBG?.warn?.("restore failure", error);
-  }
-
+  } catch { }
   instances.delete(container);
 }
 
-function rescan(root = document) {
-  if (!root?.querySelectorAll) return;
-  const found = queryTargets(root);
+function refresh(state) {
+  state.settings = readSettings(state.container);
+  scheduleUpdate(state);
+}
 
-  // Detach instances that are gone or outside scope
+function rescan(root = document) {
+  const found = queryTargets(root);
   for (const el of Array.from(instances.keys())) {
     if (!el.isConnected) { detach(el); continue; }
-    const withinScope = root === document ? true : root.contains(el);
-    if (withinScope && !found.has(el)) detach(el);
+    if (root !== document && !root.contains(el)) detach(el);
+  }
+  for (const el of found) attach(el);
+}
+
+function addHoverHandlers(state) {
+  const { container, signal } = state;
+  container.addEventListener("pointerenter", () => {
+    if (state.settings.pauseOnHover) state.anim?.pause?.();
+  }, { signal });
+  container.addEventListener("pointerleave", () => {
+    if (state.settings.pauseOnHover) state.anim?.play?.();
+  }, { signal });
+}
+
+function watchImagesOnce(state) {
+  const imgs = state.inner.querySelectorAll("img");
+  for (const img of imgs) {
+    if (img.complete) continue;
+    img.addEventListener("load", () => scheduleUpdate(state), { once: true, signal: state.signal });
+    img.addEventListener("error", () => scheduleUpdate(state), { once: true, signal: state.signal });
+  }
+}
+
+function buildHalves(state) {
+  const { container, inner, halfA, unitOriginal } = state;
+
+  // Remove extra clones in A, keep original unit
+  while (unitOriginal.nextSibling) unitOriginal.nextSibling.remove();
+
+  const containerWidth = Math.ceil(container.getBoundingClientRect().width || 0);
+  const minHalf = Math.max(1, containerWidth + 1);
+
+  let baseWidth = unitOriginal.scrollWidth;
+  if (!baseWidth) {
+    const temp = cleanClone(unitOriginal);
+    temp.setAttribute("aria-hidden", "true");
+    temp.setAttribute("inert", "");
+    halfA.appendChild(temp);
+    baseWidth = unitOriginal.scrollWidth;
   }
 
-  // Attach new ones
-  for (const el of found) attach(el);
+  while (halfA.scrollWidth < minHalf) {
+    const c = cleanClone(unitOriginal);
+    c.setAttribute("aria-hidden", "true");
+    c.setAttribute("inert", "");
+    halfA.appendChild(c);
+  }
+
+  // Rebuild B as mirror of A
+  const oldB = state.halfB;
+  const newB = oldB.cloneNode(false);
+  newB.setAttribute("aria-hidden", "true");
+  newB.setAttribute("inert", "");
+  for (const child of Array.from(halfA.children)) {
+    const c = child.cloneNode(true);
+    deepRemoveIds(c);
+    newB.appendChild(c);
+  }
+  oldB.replaceWith(newB);
+  state.halfB = newB;
+
+  return halfA.scrollWidth;
+}
+
+function computePhaseFromTransform(prevDir, prevHalf, currentTx, newHalf) {
+  if (!Number.isFinite(currentTx) || prevHalf <= 0 || newHalf <= 0) return 0;
+  const offsetPx = prevDir === "left" ? Math.max(0, Math.min(prevHalf, -currentTx))
+    : Math.max(0, Math.min(prevHalf, currentTx + prevHalf));
+  return (offsetPx % newHalf) / newHalf; // [0,1)
+}
+
+function ensureAnimation(state, halfWidth, normalizedPhase) {
+  const { inner, settings } = state;
+
+  // --- Pixel-snapping & step easing ---
+  const dpr = window.devicePixelRatio || 1;
+  const distance = Math.max(1, Math.round(halfWidth * dpr) / dpr); // snap distance to DPR grid
+  const pxSteps = Math.max(1, Math.round(distance));               // one step per CSS px
+
+  const durationMs = Math.max(1, Math.round((distance / settings.speed) * 1000));
+  const fromX = settings.direction === "left" ? 0 : -distance;
+  const toX = settings.direction === "left" ? -distance : 0;
+
+  // Snap phase to the nearest whole-pixel step to avoid fractional currentTime
+  const stepIndex = Math.round((normalizedPhase * pxSteps)) % pxSteps;
+  const phaseTime = (stepIndex / pxSteps) * durationMs;
+
+  if (!state.anim) {
+    state.anim = inner.animate(
+      [{ transform: `translateX(${fromX}px)` }, { transform: `translateX(${toX}px)` }],
+      { duration: durationMs, iterations: Infinity, easing: `steps(${pxSteps}, end)` }
+    );
+    state.anim.currentTime = phaseTime;
+  } else {
+    state.anim.effect.setKeyframes(
+      [{ transform: `translateX(${fromX}px)` }, { transform: `translateX(${toX}px)` }]
+    );
+    state.anim.effect.updateTiming({
+      duration: durationMs,
+      iterations: Infinity,
+      easing: `steps(${pxSteps}, end)`
+    });
+    state.anim.currentTime = phaseTime; // resume exactly on an integer-px step
+  }
+
+  state.metrics.halfWidth = distance;
+  state.metrics.durationMs = durationMs;
+
+  if (state.reducedMotion) {
+    state.anim.cancel();
+    inner.style.transform = "translateX(0px)";
+  }
+}
+
+function update(state) {
+  const currentTx = readTranslateX(state.inner);
+  const prevHalf = state.metrics.halfWidth || 0;
+  const prevDir = state.settings.direction;
+
+  const halfWidth = buildHalves(state);
+  watchImagesOnce(state);
+
+  const phase = computePhaseFromTransform(prevDir, prevHalf, currentTx, halfWidth);
+  ensureAnimation(state, halfWidth, phase);
 }
 
 export const Marquee = { attach, detach, rescan };
 
 export function init() {
-  if (initialized) return; // idempotent
+  if (initialized) return;
   initialized = true;
-  try {
-    if (typeof window !== "undefined") window.Marquee = Marquee;
-  } catch (_) {}
+  if (typeof window !== "undefined") window.Marquee = Marquee;
   Marquee.rescan();
 }
 
