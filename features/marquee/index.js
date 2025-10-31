@@ -65,6 +65,10 @@ function ensureStructure(container) {
   // Surface styles (no pointer-events suppression to keep content interactive)
   container.style.display = "flex";
   container.style.overflow = "hidden";
+  container.style.contain = "layout paint style";
+  // Isolate inner for smooth compositing
+  inner.style.contain = "layout paint style";
+  inner.style.transform = "translateZ(0)";
 
   container.append(inner);
   return { inner, cycle, originals };
@@ -99,10 +103,10 @@ function cloneChildrenOnce(el) {
 
 function injectKeyframes(state, totalWidth) {
   const { id, settings } = state;
-  const half = Math.round(totalWidth / 2);
+  const half = totalWidth / 2; // exact float to avoid seam rounding
   const fromX = settings.direction === "left" ? 0 : -half;
   const toX = settings.direction === "left" ? -half : 0;
-  const css = `@keyframes ${id} {\n  from { transform: translateX(${fromX}px); }\n  to { transform: translateX(${toX}px); }\n}`;
+  const css = `@keyframes ${id} {\n  from { transform: translate3d(${fromX}px,0,0); }\n  to { transform: translate3d(${toX}px,0,0); }\n}`;
   const head = document.head || document.getElementsByTagName("head")[0];
   if (!head) return;
   const prev = document.getElementById(`${id}-style`);
@@ -115,7 +119,7 @@ function injectKeyframes(state, totalWidth) {
 
 function applyAnimation(state, totalWidth) {
   const { inner, settings } = state;
-  const half = Math.max(1, Math.round(totalWidth / 2));
+  const half = Math.max(1, totalWidth / 2); // exact float distance
   const durationMs = Math.max(1, Math.round((half / settings.speed) * 1000));
   injectKeyframes(state, totalWidth);
   inner.style.animation = `${state.id} ${durationMs}ms linear infinite`;
