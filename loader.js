@@ -107,4 +107,4 @@ for (const name of uniqueFeatures) {
 }
 
 // Package version (mirrors package.json). Update on release.
-export const VERSION = "0.1.26";
+export const VERSION = "0.1.27";
