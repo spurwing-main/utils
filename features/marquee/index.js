@@ -142,8 +142,28 @@ function attach(container) {
     startupRampDuration: 400, // Ramp up over 400ms
   };
 
-  state.resizeObserver = new ResizeObserver(() => scheduleUpdate(state));
-  state.resizeObserver.observe(container);
+  // Use ResizeObserver with debouncing to prevent feedback loops
+  let resizeCheckScheduled = false;
+  state.resizeObserver = new ResizeObserver((entries) => {
+    if (resizeCheckScheduled) return;
+    resizeCheckScheduled = true;
+
+    // Use RAF to batch resize checks and avoid feedback loops
+    requestAnimationFrame(() => {
+      resizeCheckScheduled = false;
+
+      for (const entry of entries) {
+        // Only trigger if container's border-box actually changed size
+        const newWidth = Math.ceil(entry.borderBoxSize?.[0]?.inlineSize || entry.contentRect.width || 0);
+        const prevWidth = state.metrics.containerWidth || 0;
+        if (newWidth !== prevWidth) {
+          scheduleUpdate(state);
+          break;
+        }
+      }
+    });
+  });
+  state.resizeObserver.observe(container, { box: 'border-box' });
 
   state.mutationObserver = new MutationObserver((muts) => {
     let needsUpdate = false;
