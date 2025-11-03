@@ -115,6 +115,11 @@ function attach(container) {
     _scheduled: false,
     resizeObserver: null,
     mutationObserver: null,
+    // Startup momentum state
+    startupPhase: 'waiting',  // 'waiting' | 'ramping' | 'running'
+    startupMultiplier: 0.2,   // Start at 20% speed
+    startupStartTime: 0,
+    startupRampDuration: 400, // Ramp up over 400ms
   };
 
   state.resizeObserver = new ResizeObserver(() => scheduleUpdate(state));
@@ -142,7 +147,27 @@ function attach(container) {
   document.fonts?.ready?.then?.(() => scheduleUpdate(state));
   addHoverHandlers(state);
   instances.set(container, state);
+
+  // Build structure immediately (clones, halves, animation in paused state)
   update(state);
+
+  // Defer animation start for smoother page load
+  const startAnimation = () => {
+    if (!instances.has(container)) return; // Detached before startup
+    // Only start ramping if still in waiting phase (prevent race conditions)
+    if (state.startupPhase !== 'waiting') return;
+
+    state.startupPhase = 'ramping';
+    state.startupStartTime = performance.now();
+    requestAnimationFrame(() => updateStartupMomentum(state));
+  };
+
+  // Use requestIdleCallback for better performance during page load
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(startAnimation, { timeout: 500 });
+  } else {
+    setTimeout(startAnimation, 100);
+  }
 }
 
 function detach(container) {
@@ -171,16 +196,35 @@ function detach(container) {
 
 function refresh(state) {
   state.settings = readSettings(state.container);
+  // Skip startup phase on refresh - already running
+  if (state.startupPhase === 'waiting') {
+    state.startupPhase = 'running';
+    state.startupMultiplier = 1.0;
+  }
   scheduleUpdate(state);
 }
 
 function rescan(root = document) {
   const found = queryTargets(root);
+
+  // Detach elements that are disconnected, outside root, or lost data-marquee attribute
   for (const el of Array.from(instances.keys())) {
     if (!el.isConnected) { detach(el); continue; }
-    if (root !== document && !root.contains(el)) detach(el);
+    if (root !== document && !root.contains(el)) { detach(el); continue; }
+    // Detach if in scope but lost the data-marquee attribute
+    if (root === document || root.contains(el)) {
+      if (!el.hasAttribute('data-marquee')) {
+        detach(el);
+      }
+    }
   }
-  for (const el of found) attach(el);
+
+  // Only attach new elements that aren't already running
+  for (const el of found) {
+    if (!instances.has(el)) {
+      attach(el);
+    }
+  }
 }
 
 function addHoverHandlers(state) {
@@ -257,7 +301,7 @@ function computePhaseFromTransform(prevDir, prevHalf, currentTx, newHalf) {
   return (offsetPx % newHalf) / newHalf; // [0,1)
 }
 
-function ensureAnimation(state, halfWidth, normalizedPhase) {
+function ensureAnimation(state, halfWidth, normalizedPhase, speedMultiplier = 1.0) {
   const { inner, settings } = state;
 
   // --- Pixel-snapping & step easing ---
@@ -265,7 +309,9 @@ function ensureAnimation(state, halfWidth, normalizedPhase) {
   const distance = Math.max(1, Math.round(halfWidth * dpr) / dpr); // snap distance to DPR grid
   const pxSteps = Math.max(1, Math.round(distance));               // one step per CSS px
 
-  const durationMs = Math.max(1, Math.round((distance / settings.speed) * 1000));
+  // Apply speed multiplier for gradual startup
+  const effectiveSpeed = settings.speed * speedMultiplier;
+  const durationMs = Math.max(1, Math.round((distance / effectiveSpeed) * 1000));
   const fromX = settings.direction === "left" ? 0 : -distance;
   const toX = settings.direction === "left" ? -distance : 0;
 
@@ -279,6 +325,11 @@ function ensureAnimation(state, halfWidth, normalizedPhase) {
       { duration: durationMs, iterations: Number.POSITIVE_INFINITY, easing: `steps(${pxSteps}, end)` }
     );
     state.anim.currentTime = phaseTime;
+
+    // Pause on initial creation if still in waiting phase
+    if (state.startupPhase === 'waiting') {
+      state.anim.pause();
+    }
   } else {
     state.anim.effect.setKeyframes(
       [{ transform: `translateX(${fromX}px)` }, { transform: `translateX(${toX}px)` }]
@@ -300,6 +351,40 @@ function ensureAnimation(state, halfWidth, normalizedPhase) {
   }
 }
 
+function updateStartupMomentum(state) {
+  if (state.startupPhase !== 'ramping') return;
+
+  // Ensure animation is playing
+  if (state.anim && state.anim.playState === 'paused') {
+    state.anim.play();
+  }
+
+  const now = performance.now();
+  const elapsed = now - state.startupStartTime;
+  const progress = Math.min(1, elapsed / state.startupRampDuration);
+
+  // Ease-out cubic for smooth acceleration
+  const easedProgress = 1 - Math.pow(1 - progress, 3);
+  state.startupMultiplier = 0.2 + (0.8 * easedProgress); // 0.2 → 1.0
+
+  if (progress >= 1) {
+    state.startupPhase = 'running';
+    state.startupMultiplier = 1.0;
+  }
+
+  // Update animation with new speed
+  const currentTx = readTranslateX(state.inner);
+  const prevHalf = state.metrics.halfWidth || 0;
+  const prevDir = state.settings.direction;
+  const halfWidth = state.metrics.halfWidth || buildHalves(state);
+  const phase = computePhaseFromTransform(prevDir, prevHalf, currentTx, halfWidth);
+  ensureAnimation(state, halfWidth, phase, state.startupMultiplier);
+
+  if (state.startupPhase === 'ramping') {
+    requestAnimationFrame(() => updateStartupMomentum(state));
+  }
+}
+
 function update(state) {
   const currentTx = readTranslateX(state.inner);
   const prevHalf = state.metrics.halfWidth || 0;
@@ -309,7 +394,17 @@ function update(state) {
   watchImagesOnce(state);
 
   const phase = computePhaseFromTransform(prevDir, prevHalf, currentTx, halfWidth);
-  ensureAnimation(state, halfWidth, phase);
+
+  // Determine speed multiplier based on startup phase
+  let multiplier = 1.0;
+  if (state.startupPhase === 'waiting') {
+    multiplier = 1.0; // Initial build uses full speed for correct timing, but will be paused
+  } else if (state.startupPhase === 'ramping') {
+    multiplier = state.startupMultiplier; // Use current ramp multiplier
+  }
+  // else startupPhase === 'running', multiplier stays 1.0
+
+  ensureAnimation(state, halfWidth, phase, multiplier);
 }
 
 export const Marquee = { attach, detach, rescan };
