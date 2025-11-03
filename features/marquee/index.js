@@ -207,11 +207,7 @@ function detach(container) {
 
 function refresh(state) {
   state.settings = readSettings(state.container);
-  // Skip startup phase on refresh - already running
-  if (state.startupPhase === 'waiting') {
-    state.startupPhase = 'running';
-    state.startupMultiplier = 1.0;
-  }
+  // Do not force-start the animation; preserve startup phase so ramp always applies.
   scheduleUpdate(state);
 }
 
@@ -318,8 +314,8 @@ function ensureAnimation(state, halfWidth, normalizedPhase, speedMultiplier = 1.
   const distance = Math.max(1, Math.round(halfWidth * dpr) / dpr); // snap distance to DPR grid
   const pxSteps = Math.max(1, Math.round(distance));               // one step per CSS px
 
-  // Apply speed multiplier for gradual startup
-  const effectiveSpeed = settings.speed * speedMultiplier;
+  // Keep a stable base duration; ramp via playbackRate instead of retiming
+  const effectiveSpeed = settings.speed;
   const durationMs = Math.max(1, Math.round((distance / effectiveSpeed) * 1000));
   const fromX = settings.direction === "left" ? 0 : -distance;
   const toX = settings.direction === "left" ? -distance : 0;
@@ -354,6 +350,9 @@ function ensureAnimation(state, halfWidth, normalizedPhase, speedMultiplier = 1.
   state.metrics.halfWidth = distance;
   state.metrics.durationMs = durationMs;
 
+  // Apply ramp via playbackRate (avoids re-timing jitter)
+  try { state.anim.playbackRate = Math.max(0.0001, speedMultiplier); } catch (_) {}
+
   if (state.reducedMotion) {
     state.anim.cancel();
     inner.style.transform = "translateX(0px)";
@@ -378,18 +377,13 @@ function updateStartupMomentum(state) {
   const easedProgress = 1 - (1 - progress) ** 3;
   state.startupMultiplier = 0.2 + (0.8 * easedProgress); // 0.2 → 1.0
 
+  // Apply ramp by playbackRate only (avoid re-timing jitter)
+  try { state.anim.playbackRate = Math.max(0.0001, state.startupMultiplier); } catch (_) {}
+
   if (progress >= 1) {
     state.startupPhase = 'running';
     state.startupMultiplier = 1.0;
   }
-
-  // Update animation with new speed
-  const currentTx = readTranslateX(state.inner);
-  const prevHalf = state.metrics.halfWidth || 0;
-  const prevDir = state.settings.direction;
-  const halfWidth = state.metrics.halfWidth || buildHalves(state);
-  const phase = computePhaseFromTransform(prevDir, prevHalf, currentTx, halfWidth);
-  ensureAnimation(state, halfWidth, phase, state.startupMultiplier);
 
   if (state.startupPhase === 'ramping') {
     scheduleRaf(() => updateStartupMomentum(state));
