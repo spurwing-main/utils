@@ -4,6 +4,17 @@ const instances = new Map();
 let initialized = false;
 function genId() { return `mq-${Math.random().toString(36).slice(2, 10)}`; }
 
+// POLICY-EXCEPTION: In non-browser test environments, requestAnimationFrame may not exist.
+// Provide a minimal fallback using setTimeout solely to schedule a single frame.
+function scheduleRaf(cb) {
+  const w = typeof window !== 'undefined' ? window : undefined;
+  const rafFn = (w && typeof w.requestAnimationFrame === 'function')
+    ? w.requestAnimationFrame
+    : (typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null);
+  if (rafFn) return rafFn(cb);
+  return setTimeout(cb, 16);
+}
+
 function readSettings(el) {
   const dir = (el.getAttribute("data-marquee-direction") || "left").toLowerCase();
   const speedRaw = el.getAttribute("data-marquee-speed");
@@ -159,7 +170,7 @@ function attach(container) {
 
     state.startupPhase = 'ramping';
     state.startupStartTime = performance.now();
-    requestAnimationFrame(() => updateStartupMomentum(state));
+    scheduleRaf(() => updateStartupMomentum(state));
   };
 
   // Use requestIdleCallback for better performance during page load
@@ -219,11 +230,9 @@ function rescan(root = document) {
     }
   }
 
-  // Only attach new elements that aren't already running
+  // Attach or refresh all found elements to keep dynamic content in sync
   for (const el of found) {
-    if (!instances.has(el)) {
-      attach(el);
-    }
+    attach(el); // attach() refreshes if already initialized
   }
 }
 
@@ -352,6 +361,8 @@ function ensureAnimation(state, halfWidth, normalizedPhase, speedMultiplier = 1.
 }
 
 function updateStartupMomentum(state) {
+  // If detached between frames, stop immediately
+  if (!instances.has(state.container)) return;
   if (state.startupPhase !== 'ramping') return;
 
   // Ensure animation is playing
@@ -364,7 +375,7 @@ function updateStartupMomentum(state) {
   const progress = Math.min(1, elapsed / state.startupRampDuration);
 
   // Ease-out cubic for smooth acceleration
-  const easedProgress = 1 - Math.pow(1 - progress, 3);
+  const easedProgress = 1 - (1 - progress) ** 3;
   state.startupMultiplier = 0.2 + (0.8 * easedProgress); // 0.2 → 1.0
 
   if (progress >= 1) {
@@ -381,7 +392,7 @@ function updateStartupMomentum(state) {
   ensureAnimation(state, halfWidth, phase, state.startupMultiplier);
 
   if (state.startupPhase === 'ramping') {
-    requestAnimationFrame(() => updateStartupMomentum(state));
+    scheduleRaf(() => updateStartupMomentum(state));
   }
 }
 
