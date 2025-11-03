@@ -308,7 +308,7 @@ function buildHalves(state) {
 
   // Batch DOM operations: collect clones first, append once
   const clonesToAdd = [];
-  let baseWidth = unitOriginal.scrollWidth;
+  const baseWidth = unitOriginal.scrollWidth;
 
   if (!baseWidth) {
     const temp = cleanClone(unitOriginal);
