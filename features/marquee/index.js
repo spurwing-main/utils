@@ -131,26 +131,28 @@ function attach(container) {
     anim: null,
     metrics: { halfWidth: 0, durationMs: 0, containerWidth: 0, contentWidth: 0 },
     _scheduled: false,
-    _updating: false, // Prevent ResizeObserver feedback loop
-    _pendingUpdate: false, // Track if update was requested during _updating
+    _updating: false,
+    _pendingUpdate: false,
+    _resizeRafId: null, // Track RAF for cleanup
+    _watchedImages: new WeakSet(), // Track images to avoid duplicate listeners
     resizeObserver: null,
     mutationObserver: null,
     // Startup momentum state
-    startupPhase: 'waiting',  // 'waiting' | 'ramping' | 'running'
-    startupMultiplier: 0.2,   // Start at 20% speed
+    startupPhase: 'waiting',
+    startupMultiplier: 0.2,
     startupStartTime: 0,
-    startupRampDuration: 400, // Ramp up over 400ms
+    startupRampDuration: 400,
   };
 
-  // Use ResizeObserver with debouncing to prevent feedback loops
-  let resizeCheckScheduled = false;
+  // Use ResizeObserver with RAF debouncing to prevent feedback loops
   state.resizeObserver = new ResizeObserver((entries) => {
-    if (resizeCheckScheduled) return;
-    resizeCheckScheduled = true;
+    if (state._resizeRafId !== null) return;
 
-    // Use RAF to batch resize checks and avoid feedback loops
-    requestAnimationFrame(() => {
-      resizeCheckScheduled = false;
+    state._resizeRafId = requestAnimationFrame(() => {
+      state._resizeRafId = null;
+
+      // Check if still attached
+      if (!instances.has(container)) return;
 
       for (const entry of entries) {
         // Only trigger if container's border-box actually changed size
@@ -174,9 +176,12 @@ function attach(container) {
         state.settings = readSettings(container);
         needsUpdate = true;
       }
-      // Check for content changes (childList, characterData)
+      // Check for content changes in unitOriginal only (not clones)
       if (m.type === 'childList' || m.type === 'characterData') {
-        needsUpdate = true;
+        // Only react to changes in original content, not our generated structure
+        if (m.target === container || state.unitOriginal.contains(m.target) || m.target === state.unitOriginal) {
+          needsUpdate = true;
+        }
       }
     }
 
@@ -187,9 +192,9 @@ function attach(container) {
   state.mutationObserver.observe(container, {
     attributes: true,
     attributeFilter: ["data-marquee-speed", "data-marquee-direction", "data-marquee-pause-on-hover"],
-    childList: true, // Watch for added/removed children
-    subtree: true,   // Watch all descendants
-    characterData: true, // Watch text changes
+    childList: true,
+    subtree: true,
+    characterData: true,
   });
 
   reducedQuery.addEventListener("change", () => {
@@ -229,16 +234,25 @@ function attach(container) {
 function detach(container) {
   const state = instances.get(container);
   if (!state) return;
+
+  // Cancel pending RAF callbacks
+  if (state._resizeRafId !== null) {
+    cancelAnimationFrame(state._resizeRafId);
+    state._resizeRafId = null;
+  }
+
   state.resizeObserver?.disconnect();
   state.mutationObserver?.disconnect();
   state.ac.abort();
   state.anim?.cancel?.();
+
   try {
     for (const n of state.originals) state.container.appendChild(n);
     state.inner.remove();
   } catch (_error) {
     // POLICY: contain failures; attempt best-effort cleanup without throwing
   }
+
   if (state.originalStyle == null) {
     // Explicitly reset inline styles we set
     state.container.style.overflow = "visible";
@@ -247,6 +261,7 @@ function detach(container) {
   } else {
     state.container.setAttribute("style", state.originalStyle);
   }
+
   instances.delete(container);
 }
 
@@ -260,7 +275,7 @@ function rescan(root = document) {
   const found = queryTargets(root);
 
   // Detach elements that are disconnected, outside root, or lost data-marquee attribute
-  for (const el of Array.from(instances.keys())) {
+  for (const el of instances.keys()) {
     if (!el.isConnected) { detach(el); continue; }
     if (root !== document && !root.contains(el)) { detach(el); continue; }
     // Detach if in scope but lost the data-marquee attribute
@@ -283,11 +298,15 @@ function addHoverHandlers(state) {
     // Don't pause during waiting phase (already paused for startup)
     if (state.settings.pauseOnHover && state.startupPhase !== 'waiting') {
       state.anim?.pause?.();
+      // Remove willChange to free GPU layer when paused
+      state.inner.style.willChange = 'auto';
     }
   }, { signal });
   container.addEventListener("pointerleave", () => {
     // Don't play during waiting phase (startup will handle it)
     if (state.settings.pauseOnHover && state.startupPhase !== 'waiting') {
+      // Restore willChange before playing
+      state.inner.style.willChange = 'transform';
       state.anim?.play?.();
     }
   }, { signal });
@@ -296,7 +315,10 @@ function addHoverHandlers(state) {
 function watchImagesOnce(state) {
   const imgs = state.inner.querySelectorAll("img");
   for (const img of imgs) {
-    if (img.complete) continue;
+    // Skip if already complete or already watching
+    if (img.complete || state._watchedImages.has(img)) continue;
+
+    state._watchedImages.add(img);
     img.addEventListener("load", () => scheduleUpdate(state), { once: true, signal: state.signal });
     img.addEventListener("error", () => scheduleUpdate(state), { once: true, signal: state.signal });
   }
@@ -368,7 +390,7 @@ function buildHalves(state) {
   newB.setAttribute("inert", "");
 
   const fragment = document.createDocumentFragment();
-  for (const child of Array.from(halfA.children)) {
+  for (const child of halfA.children) {
     const c = child.cloneNode(true);
     deepRemoveIds(c);
     fragment.appendChild(c);
@@ -448,6 +470,10 @@ function ensureAnimation(state, halfWidth, normalizedPhase, speedMultiplier = 1.
   if (state.reducedMotion) {
     state.anim.cancel();
     inner.style.transform = "translateX(0px)";
+    inner.style.willChange = 'auto'; // Free GPU layer for reduced motion
+  } else if (state.anim && state.anim.playState === 'running') {
+    // Ensure willChange is set when animation is running
+    inner.style.willChange = 'transform';
   }
 }
 
@@ -496,23 +522,26 @@ function update(state) {
   state.mutationObserver?.disconnect();
 
   try {
-    const currentTx = readTranslateX(state.inner);
+    // Batch all style reads before any writes
     const prevHalf = state.metrics.halfWidth || 0;
     const prevDir = state.settings.direction;
 
+    // Read current transform and container dimensions in one batch
+    const currentTx = readTranslateX(state.inner);
+
+    // Build halves (includes DOM writes)
     const halfWidth = buildHalves(state);
     watchImagesOnce(state);
 
     const phase = computePhaseFromTransform(prevDir, prevHalf, currentTx, halfWidth);
 
     // Determine speed multiplier based on startup phase
-    let multiplier = state.startupMultiplier; // Default to current multiplier
+    let multiplier = state.startupMultiplier;
     if (state.startupPhase === 'waiting') {
-      multiplier = 0.2; // Start slow, animation will be paused anyway
+      multiplier = 0.2;
     } else if (state.startupPhase === 'running') {
-      multiplier = 1.0; // Full speed when running
+      multiplier = 1.0;
     }
-    // else startupPhase === 'ramping', use current startupMultiplier
 
     ensureAnimation(state, halfWidth, phase, multiplier);
   } finally {
