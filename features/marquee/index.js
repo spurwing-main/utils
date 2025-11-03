@@ -96,6 +96,13 @@ function readTranslateX(el) {
 
 function scheduleUpdate(state) {
   if (state._scheduled) return;
+
+  // If currently updating, mark pending and return
+  if (state._updating) {
+    state._pendingUpdate = true;
+    return;
+  }
+
   state._scheduled = true;
   queueMicrotask(() => { state._scheduled = false; update(state); });
 }
@@ -122,8 +129,10 @@ function attach(container) {
     reducedMotion: !!reducedQuery.matches,
     reducedQuery, ac, signal,
     anim: null,
-    metrics: { halfWidth: 0, durationMs: 0 },
+    metrics: { halfWidth: 0, durationMs: 0, containerWidth: 0, contentWidth: 0 },
     _scheduled: false,
+    _updating: false, // Prevent ResizeObserver feedback loop
+    _pendingUpdate: false, // Track if update was requested during _updating
     resizeObserver: null,
     mutationObserver: null,
     // Startup momentum state
@@ -137,21 +146,37 @@ function attach(container) {
   state.resizeObserver.observe(container);
 
   state.mutationObserver = new MutationObserver((muts) => {
+    let needsUpdate = false;
+
     for (const m of muts) {
-      if (/^data-marquee/.test(m.attributeName)) {
+      // Check for attribute changes
+      if (m.type === 'attributes' && /^data-marquee/.test(m.attributeName)) {
         state.settings = readSettings(container);
-        scheduleUpdate(state);
-        return;
+        needsUpdate = true;
       }
+      // Check for content changes (childList, characterData)
+      if (m.type === 'childList' || m.type === 'characterData') {
+        needsUpdate = true;
+      }
+    }
+
+    if (needsUpdate) {
+      scheduleUpdate(state);
     }
   });
   state.mutationObserver.observe(container, {
     attributes: true,
     attributeFilter: ["data-marquee-speed", "data-marquee-direction", "data-marquee-pause-on-hover"],
+    childList: true, // Watch for added/removed children
+    subtree: true,   // Watch all descendants
+    characterData: true, // Watch text changes
   });
 
   reducedQuery.addEventListener("change", () => {
     state.reducedMotion = reducedQuery.matches;
+    if (state.reducedMotion && state.startupPhase === 'ramping') {
+      state.startupPhase = 'running'; // Stop ramp immediately
+    }
     scheduleUpdate(state);
   }, { signal });
 
@@ -235,10 +260,16 @@ function rescan(root = document) {
 function addHoverHandlers(state) {
   const { container, signal } = state;
   container.addEventListener("pointerenter", () => {
-    if (state.settings.pauseOnHover) state.anim?.pause?.();
+    // Don't pause during waiting phase (already paused for startup)
+    if (state.settings.pauseOnHover && state.startupPhase !== 'waiting') {
+      state.anim?.pause?.();
+    }
   }, { signal });
   container.addEventListener("pointerleave", () => {
-    if (state.settings.pauseOnHover) state.anim?.play?.();
+    // Don't play during waiting phase (startup will handle it)
+    if (state.settings.pauseOnHover && state.startupPhase !== 'waiting') {
+      state.anim?.play?.();
+    }
   }, { signal });
 }
 
@@ -254,33 +285,60 @@ function watchImagesOnce(state) {
 function buildHalves(state) {
   const { container, halfA, unitOriginal } = state;
 
+  const containerWidth = Math.ceil(container.getBoundingClientRect().width || 0);
+  const currentContentWidth = unitOriginal.scrollWidth;
+
+  const prevContainerWidth = state.metrics.containerWidth || 0;
+  const prevContentWidth = state.metrics.contentWidth || 0;
+
+  // Skip rebuild only if BOTH container AND content unchanged
+  if (containerWidth === prevContainerWidth &&
+      currentContentWidth === prevContentWidth &&
+      halfA.children.length > 1) {
+    return halfA.scrollWidth;
+  }
+
+  state.metrics.containerWidth = containerWidth;
+  state.metrics.contentWidth = currentContentWidth;
+
   // Remove extra clones in A, keep original unit
   while (unitOriginal.nextSibling) unitOriginal.nextSibling.remove();
 
-  const containerWidth = Math.ceil(container.getBoundingClientRect().width || 0);
   const minHalf = Math.max(1, containerWidth + 1);
 
+  // Batch DOM operations: collect clones first, append once
+  const clonesToAdd = [];
   let baseWidth = unitOriginal.scrollWidth;
+
   if (!baseWidth) {
     const temp = cleanClone(unitOriginal);
     temp.setAttribute("aria-hidden", "true");
     temp.setAttribute("inert", "");
-    halfA.appendChild(temp);
-    baseWidth = unitOriginal.scrollWidth;
+    clonesToAdd.push(temp);
   }
 
-  // Add clones until the half exceeds container width; guard against no-layout envs
-  let guard = 0;
-  let lastWidth = halfA.scrollWidth | 0;
-  while (halfA.scrollWidth < minHalf) {
+  // Calculate how many clones needed - be generous to avoid second pass
+  const estimatedUnitWidth = baseWidth || 200;
+  const estimatedClonesNeeded = Math.ceil(minHalf / estimatedUnitWidth) + 2;
+
+  for (let i = 0; i < estimatedClonesNeeded && i < 32; i++) {
     const c = cleanClone(unitOriginal);
     c.setAttribute("aria-hidden", "true");
     c.setAttribute("inert", "");
-    halfA.appendChild(c);
-    guard += 1;
-    const w = halfA.scrollWidth | 0;
-    if (w <= lastWidth || guard > 32) break; // safety: jsdom may keep scrollWidth at 0
-    lastWidth = w;
+    clonesToAdd.push(c);
+  }
+
+  // Single batch append
+  halfA.append(...clonesToAdd);
+
+  // If estimation was wrong, add clones until we have enough
+  let safetyCount = 0;
+  while (halfA.scrollWidth < minHalf && safetyCount < 32) {
+    const extra = cleanClone(unitOriginal);
+    extra.setAttribute("aria-hidden", "true");
+    extra.setAttribute("inert", "");
+    halfA.appendChild(extra);
+    safetyCount++;
   }
 
   // Rebuild B as mirror of A
@@ -288,11 +346,14 @@ function buildHalves(state) {
   const newB = oldB.cloneNode(false);
   newB.setAttribute("aria-hidden", "true");
   newB.setAttribute("inert", "");
+
+  const fragment = document.createDocumentFragment();
   for (const child of Array.from(halfA.children)) {
     const c = child.cloneNode(true);
     deepRemoveIds(c);
-    newB.appendChild(c);
+    fragment.appendChild(c);
   }
+  newB.appendChild(fragment);
   oldB.replaceWith(newB);
   state.halfB = newB;
 
@@ -311,31 +372,39 @@ function ensureAnimation(state, halfWidth, normalizedPhase, speedMultiplier = 1.
 
   // --- Pixel-snapping & step easing ---
   const dpr = window.devicePixelRatio || 1;
-  const distance = Math.max(1, Math.round(halfWidth * dpr) / dpr); // snap distance to DPR grid
-  const pxSteps = Math.max(1, Math.round(distance));               // one step per CSS px
+  const distance = Math.max(1, Math.round(halfWidth * dpr) / dpr);
+  const pxSteps = Math.max(1, Math.round(distance));
 
-  // Keep a stable base duration; ramp via playbackRate instead of retiming
   const effectiveSpeed = settings.speed;
   const durationMs = Math.max(1, Math.round((distance / effectiveSpeed) * 1000));
   const fromX = settings.direction === "left" ? 0 : -distance;
   const toX = settings.direction === "left" ? -distance : 0;
 
-  // Snap phase to the nearest whole-pixel step to avoid fractional currentTime
   const stepIndex = Math.round((normalizedPhase * pxSteps)) % pxSteps;
   const phaseTime = (stepIndex / pxSteps) * durationMs;
 
+  // Check if animation parameters actually changed
+  const paramsChanged =
+    state.metrics.halfWidth !== distance ||
+    state.metrics.durationMs !== durationMs;
+
   if (!state.anim) {
+    // Create animation with correct playbackRate from the start
     state.anim = inner.animate(
       [{ transform: `translateX(${fromX}px)` }, { transform: `translateX(${toX}px)` }],
       { duration: durationMs, iterations: Number.POSITIVE_INFINITY, easing: `steps(${pxSteps}, end)` }
     );
     state.anim.currentTime = phaseTime;
 
+    // Set playbackRate BEFORE play to avoid race condition
+    state.anim.playbackRate = Math.max(0.0001, speedMultiplier);
+
     // Pause on initial creation if still in waiting phase
     if (state.startupPhase === 'waiting') {
       state.anim.pause();
     }
-  } else {
+  } else if (paramsChanged) {
+    // Only update if parameters actually changed
     state.anim.effect.setKeyframes(
       [{ transform: `translateX(${fromX}px)` }, { transform: `translateX(${toX}px)` }]
     );
@@ -344,14 +413,17 @@ function ensureAnimation(state, halfWidth, normalizedPhase, speedMultiplier = 1.
       iterations: Number.POSITIVE_INFINITY,
       easing: `steps(${pxSteps}, end)`
     });
-    state.anim.currentTime = phaseTime; // resume exactly on an integer-px step
+    state.anim.currentTime = phaseTime;
+    state.anim.playbackRate = Math.max(0.0001, speedMultiplier);
+  } else {
+    // Just update playbackRate if needed (smooth ramp updates)
+    if (Math.abs(state.anim.playbackRate - speedMultiplier) > 0.001) {
+      state.anim.playbackRate = Math.max(0.0001, speedMultiplier);
+    }
   }
 
   state.metrics.halfWidth = distance;
   state.metrics.durationMs = durationMs;
-
-  // Apply ramp via playbackRate (avoids re-timing jitter)
-  try { state.anim.playbackRate = Math.max(0.0001, speedMultiplier); } catch (_) {}
 
   if (state.reducedMotion) {
     state.anim.cancel();
@@ -360,14 +432,10 @@ function ensureAnimation(state, halfWidth, normalizedPhase, speedMultiplier = 1.
 }
 
 function updateStartupMomentum(state) {
-  // If detached between frames, stop immediately
+  // Stop if detached, not ramping, or reduced motion enabled
   if (!instances.has(state.container)) return;
   if (state.startupPhase !== 'ramping') return;
-
-  // Ensure animation is playing
-  if (state.anim && state.anim.playState === 'paused') {
-    state.anim.play();
-  }
+  if (state.reducedMotion) return;
 
   const now = performance.now();
   const elapsed = now - state.startupStartTime;
@@ -377,12 +445,21 @@ function updateStartupMomentum(state) {
   const easedProgress = 1 - (1 - progress) ** 3;
   state.startupMultiplier = 0.2 + (0.8 * easedProgress); // 0.2 → 1.0
 
-  // Apply ramp by playbackRate only (avoid re-timing jitter)
-  try { state.anim.playbackRate = Math.max(0.0001, state.startupMultiplier); } catch (_) {}
+  // Set playbackRate FIRST, then ensure playing
+  if (state.anim && state.anim.playState !== 'idle') {
+    state.anim.playbackRate = Math.max(0.0001, state.startupMultiplier);
+    if (state.anim.playState === 'paused') {
+      state.anim.play();
+    }
+  }
 
   if (progress >= 1) {
     state.startupPhase = 'running';
     state.startupMultiplier = 1.0;
+    if (state.anim && state.anim.playState !== 'idle') {
+      state.anim.playbackRate = 1.0;
+    }
+    return; // Don't schedule next frame
   }
 
   if (state.startupPhase === 'ramping') {
@@ -391,25 +468,53 @@ function updateStartupMomentum(state) {
 }
 
 function update(state) {
-  const currentTx = readTranslateX(state.inner);
-  const prevHalf = state.metrics.halfWidth || 0;
-  const prevDir = state.settings.direction;
+  // Prevent ResizeObserver feedback loop
+  if (state._updating) return;
+  state._updating = true;
 
-  const halfWidth = buildHalves(state);
-  watchImagesOnce(state);
+  // Disconnect observers to prevent feedback from our own DOM changes
+  state.mutationObserver?.disconnect();
 
-  const phase = computePhaseFromTransform(prevDir, prevHalf, currentTx, halfWidth);
+  try {
+    const currentTx = readTranslateX(state.inner);
+    const prevHalf = state.metrics.halfWidth || 0;
+    const prevDir = state.settings.direction;
 
-  // Determine speed multiplier based on startup phase
-  let multiplier = 1.0;
-  if (state.startupPhase === 'waiting') {
-    multiplier = 1.0; // Initial build uses full speed for correct timing, but will be paused
-  } else if (state.startupPhase === 'ramping') {
-    multiplier = state.startupMultiplier; // Use current ramp multiplier
+    const halfWidth = buildHalves(state);
+    watchImagesOnce(state);
+
+    const phase = computePhaseFromTransform(prevDir, prevHalf, currentTx, halfWidth);
+
+    // Determine speed multiplier based on startup phase
+    let multiplier = state.startupMultiplier; // Default to current multiplier
+    if (state.startupPhase === 'waiting') {
+      multiplier = 0.2; // Start slow, animation will be paused anyway
+    } else if (state.startupPhase === 'running') {
+      multiplier = 1.0; // Full speed when running
+    }
+    // else startupPhase === 'ramping', use current startupMultiplier
+
+    ensureAnimation(state, halfWidth, phase, multiplier);
+  } finally {
+    state._updating = false;
+
+    // Only reconnect if still attached
+    if (instances.has(state.container) && state.mutationObserver) {
+      state.mutationObserver.observe(state.container, {
+        attributes: true,
+        attributeFilter: ["data-marquee-speed", "data-marquee-direction", "data-marquee-pause-on-hover"],
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+    }
+
+    // Process any pending update that was blocked (only if still attached)
+    if (state._pendingUpdate && instances.has(state.container)) {
+      state._pendingUpdate = false;
+      scheduleUpdate(state);
+    }
   }
-  // else startupPhase === 'running', multiplier stays 1.0
-
-  ensureAnimation(state, halfWidth, phase, multiplier);
 }
 
 export const Marquee = { attach, detach, rescan };
