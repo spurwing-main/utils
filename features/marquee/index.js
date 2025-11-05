@@ -1,5 +1,5 @@
-// marquee - Smooth infinite ticker with minimal cloning
-// Main thread rAF animation with velocity-based movement
+// marquee - Item reprojection ticker
+// Minimal cloning with per-item transform repositioning
 
 const instances = new Map();
 let initialized = false;
@@ -40,17 +40,16 @@ function createStructure(container) {
   // Only wrap element nodes, skip text nodes (whitespace)
   const originals = Array.from(container.children);
 
-  // Wrapper moves as whole unit
+  // Wrapper stays at origin - items move individually
   const wrapper = document.createElement("div");
   Object.assign(wrapper.style, {
     display: "flex",
     flexWrap: "nowrap",
     width: "max-content",
     gap: "inherit",
-    willChange: "transform",
   });
 
-  // Items in normal flex flow
+  // Items in normal flex flow, each with individual transform
   const items = [];
   for (const node of originals) {
     const itemContainer = document.createElement("div");
@@ -59,6 +58,7 @@ function createStructure(container) {
       flexWrap: "nowrap",
       gap: "inherit",
       flexShrink: "0",
+      willChange: "transform",
     });
     itemContainer.appendChild(node);
     wrapper.appendChild(itemContainer);
@@ -66,6 +66,7 @@ function createStructure(container) {
     items.push({
       element: itemContainer,
       width: 0,
+      offset: 0, // Individual item offset for reprojection
       isClone: false,
       original: node,
     });
@@ -88,17 +89,17 @@ function measureAndClone(state) {
   const marqueeWidth = container.getBoundingClientRect().width;
 
   // Measure original items
-  let originalWidth = 0;
+  let totalWidth = 0;
   for (const item of items) {
     if (item.isClone) continue;
     item.width = item.element.getBoundingClientRect().width;
-    originalWidth += item.width;
+    totalWidth += item.width;
   }
 
-  // For seamless loop, we need at least 2x original content
-  // Plus enough to fill viewport at max offset
-  const minWidth = Math.max(originalWidth * 2, marqueeWidth + originalWidth);
-  let currentWidth = originalWidth;
+  // Only clone enough to fill viewport + small buffer
+  // Item reprojection eliminates need for 2x cloning
+  const minWidth = marqueeWidth + totalWidth * 0.5;
+  let currentWidth = totalWidth;
   const clonedItems = [];
 
   while (currentWidth < minWidth && items.length + clonedItems.length < 50) {
@@ -106,24 +107,25 @@ function measureAndClone(state) {
       if (originalItem.isClone) continue;
       if (currentWidth >= minWidth) break;
 
+      const clonedNode = originalItem.original.cloneNode(true);
+      deepRemoveIds(clonedNode);
+
       const clone = document.createElement("div");
       Object.assign(clone.style, {
         display: "flex",
         flexWrap: "nowrap",
         gap: "inherit",
         flexShrink: "0",
+        willChange: "transform",
       });
-
-      const clonedNode = originalItem.original.cloneNode(true);
-      deepRemoveIds(clonedNode);
       clone.appendChild(clonedNode);
       clone.setAttribute("aria-hidden", "true");
       clone.setAttribute("inert", "");
-
       wrapper.appendChild(clone);
 
       clonedItems.push({
         element: clone,
+        offset: 0,
         width: originalItem.width,
         isClone: true,
         original: clonedNode,
@@ -134,117 +136,140 @@ function measureAndClone(state) {
   }
 
   items.push(...clonedItems);
-  return originalWidth;
+  return totalWidth;
 }
 
 function attach(container) {
-  if (!container || container.nodeType !== 1) return;
-  if (instances.has(container)) {
-    refresh(instances.get(container));
-    return;
-  }
+  if (instances.has(container)) return;
 
-  const id = genId();
   const settings = readSettings(container);
-  const { wrapper, items, originals } = createStructure(container);
-  const originalStyle = container.getAttribute("style");
-
+  const preferReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const reducedQuery = preferReducedMotion;
   const ac = new AbortController();
   const signal = ac.signal;
 
-  const reducedQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const { wrapper, items, originals } = createStructure(container);
 
   const state = {
-    id,
     container,
     wrapper,
     items,
     originals,
-    originalStyle,
     settings,
-    reducedMotion: reducedQuery.matches,
     reducedQuery,
     ac,
     signal,
-    wrapperOffset: 0,
-    originalWidth: 0,
+    progress: 0, // Overall progress in pixels
+    totalWidth: 0,
     lastTimestamp: 0,
     rafId: null,
     isIntersecting: true,
-    playing: true,
-    initialized: false,
+    isPaused: false,
+    isHovered: false,
     resizeObserver: null,
     intersectionObserver: null,
   };
 
-  // Measure and create clones
-  state.originalWidth = measureAndClone(state);
+  // Measure and create minimal clones
+  state.totalWidth = measureAndClone(state);
+
+  // Position items initially
+  let accumulated = 0;
+  for (const item of state.items) {
+    item.offset = accumulated;
+    accumulated += item.width;
+  }
 
   // Viewport awareness - pause when off-screen
   state.intersectionObserver = new IntersectionObserver((entries) => {
     for (const entry of entries) {
-      state.isIntersecting = entry.isIntersecting;
-      if (entry.isIntersecting && state.playing && !state.reducedMotion) {
-        startAnimation(state);
-      } else {
-        stopAnimation(state);
+      if (entry.target === container) {
+        state.isIntersecting = entry.isIntersecting;
+        if (state.isIntersecting) {
+          start(state);
+        } else {
+          stop(state);
+        }
       }
     }
-  }, { threshold: 0 });
+  }, {
+    threshold: 0,
+  });
   state.intersectionObserver.observe(container);
 
-  // Responsive - rebuild clones on resize
+  // Responsive - rebuild on resize
   state.resizeObserver = new ResizeObserver(() => {
-    if (!instances.has(container)) return;
     updateSize(state);
   });
   state.resizeObserver.observe(container);
 
-  // Reduced motion support
-  reducedQuery.addEventListener("change", () => {
-    state.reducedMotion = reducedQuery.matches;
-    if (state.reducedMotion) {
-      stopAnimation(state);
-      resetPositions(state);
-    } else if (state.isIntersecting && state.playing) {
-      startAnimation(state);
-    }
-  }, { signal });
-
-  // Font loading support
-  document.fonts?.ready?.then?.(() => {
-    if (instances.has(container)) {
-      updateSize(state);
-    }
-  });
-
   // Pause on hover
-  if (settings.pauseOnHover) {
-    container.addEventListener("pointerenter", () => {
-      state.playing = false;
-      stopAnimation(state);
+  if (state.settings.pauseOnHover) {
+    container.addEventListener("mouseenter", () => {
+      state.isHovered = true;
+      stop(state);
     }, { signal });
 
-    container.addEventListener("pointerleave", () => {
-      state.playing = true;
-      if (state.isIntersecting && !state.reducedMotion) {
-        startAnimation(state);
-      }
+    container.addEventListener("mouseleave", () => {
+      state.isHovered = false;
+      if (state.isIntersecting) start(state);
     }, { signal });
   }
+
+  // Watch for setting changes
+  const updateSettings = () => {
+    const next = readSettings(container);
+    const oldDir = state.settings.direction;
+    state.settings = next;
+    if (next.direction !== oldDir) {
+      resetPositions(state);
+    }
+  };
+
+  const attrObserver = new MutationObserver(updateSettings);
+  attrObserver.observe(container, {
+    attributes: true,
+    attributeFilter: ["data-marquee-speed", "data-marquee-direction", "data-marquee-pause-on-hover"],
+  });
+  ac.signal.addEventListener("abort", () => attrObserver.disconnect());
 
   instances.set(container, state);
-  state.initialized = true;
 
-  // Start if visible
-  if (state.isIntersecting && state.playing && !state.reducedMotion) {
-    startAnimation(state);
+  // Start if visible and not paused
+  if (state.isIntersecting && !state.isHovered) {
+    start(state);
   }
+
+  resetPositions(state);
+}
+
+function resetPositions(state) {
+  // Reset all item positions
+  let accumulated = 0;
+  for (const item of state.items) {
+    item.offset = accumulated;
+    item.element.style.transform = `translateX(${item.offset}px)`;
+    accumulated += item.width;
+  }
+  state.progress = 0;
+}
+
+function start(state) {
+  if (state.rafId !== null || state.reducedQuery.matches) return;
+  state.isPaused = false;
+  state.lastTimestamp = 0;
+  state.rafId = requestAnimationFrame((ts) => tick(state, ts));
+}
+
+function stop(state) {
+  if (state.rafId !== null) {
+    cancelAnimationFrame(state.rafId);
+    state.rafId = null;
+  }
+  state.isPaused = true;
 }
 
 function tick(state, timestamp) {
-  if (!state.rafId) return;
-
   // Calculate delta time
   if (!state.lastTimestamp) {
     state.lastTimestamp = timestamp;
@@ -252,144 +277,106 @@ function tick(state, timestamp) {
   const deltaTime = timestamp - state.lastTimestamp;
   state.lastTimestamp = timestamp;
 
-  // Update wrapper offset based on velocity
-  // Negate velocity so direction: 1 (left) gives negative offset
+  // Update progress based on velocity
+  // Negate so direction: 1 (left) gives negative movement
   const velocity = -state.settings.speed * state.settings.direction;
-  state.wrapperOffset += (velocity * deltaTime) / 1000;
+  state.progress += (velocity * deltaTime) / 1000;
 
-  // Loop at original content width for seamless repeat
-  // When we've moved by originalWidth, clones look identical to originals
-  if (state.settings.direction === 1) {
-    // Moving left
-    if (state.wrapperOffset <= -state.originalWidth) {
-      state.wrapperOffset += state.originalWidth;
-    }
-  } else {
-    // Moving right
-    if (state.wrapperOffset >= state.originalWidth) {
-      state.wrapperOffset -= state.originalWidth;
-    }
-  }
+  // Reproject items
+  // For left movement (direction: 1), items moving off left edge get teleported to right
+  // For right movement (direction: -1), items moving off right edge get teleported to left
+  const containerWidth = state.container.getBoundingClientRect().width;
 
-  // Apply transform to wrapper
-  state.wrapper.style.transform = `translateX(${state.wrapperOffset}px)`;
-
-  // Continue loop
-  state.rafId = requestAnimationFrame((ts) => tick(state, ts));
-}
-
-function resetPositions(state) {
-  state.wrapperOffset = 0;
-  state.wrapper.style.transform = `translateX(0px)`;
-}
-
-function startAnimation(state) {
-  if (state.rafId || state.reducedMotion) return;
-
-  state.lastTimestamp = 0;
-  state.rafId = requestAnimationFrame((ts) => tick(state, ts));
-}
-
-function stopAnimation(state) {
-  if (state.rafId) {
-    cancelAnimationFrame(state.rafId);
-    state.rafId = null;
-    state.lastTimestamp = 0;
-  }
-}
-
-function updateSize(state) {
-  if (!state.initialized) return;
-
-  stopAnimation(state);
-
-  // Remove clones
   for (const item of state.items) {
-    if (item.isClone) {
-      item.element.remove();
+    // Calculate item's current visual position
+    const itemPosition = item.offset + state.progress;
+
+    if (state.settings.direction === 1) {
+      // Moving left - item exits on left, reappears on right
+      if (itemPosition + item.width < 0) {
+        // Item completely off-screen left, teleport to right
+        item.offset += state.totalWidth;
+      }
+    } else {
+      // Moving right - item exits on right, reappears on left
+      if (itemPosition > containerWidth) {
+        // Item completely off-screen right, teleport to left
+        item.offset -= state.totalWidth;
+      }
     }
+
+    // Apply combined transform
+    const finalPosition = item.offset + state.progress;
+    item.element.style.transform = `translateX(${finalPosition}px)`;
   }
 
-  // Keep only originals
-  state.items = state.items.filter(item => !item.isClone);
-
-  // Re-measure and clone
-  state.originalWidth = measureAndClone(state);
-  state.wrapperOffset = 0;
-  resetPositions(state);
-
-  // Restart if should be playing
-  if (state.isIntersecting && state.playing && !state.reducedMotion) {
-    startAnimation(state);
-  }
+  // Schedule next frame
+  state.rafId = requestAnimationFrame((ts) => tick(state, ts));
 }
 
 function detach(container) {
   const state = instances.get(container);
   if (!state) return;
 
-  stopAnimation(state);
+  stop(state);
+  state.ac.abort();
   state.resizeObserver?.disconnect();
   state.intersectionObserver?.disconnect();
-  state.ac.abort();
 
-  try {
-    // Restore original content
-    for (const node of state.originals) {
-      container.appendChild(node);
-    }
-    state.wrapper?.remove();
-  } catch (_error) {
-    // Best-effort cleanup
+  // Restore original structure
+  while (container.firstChild) {
+    container.removeChild(container.firstChild);
+  }
+  for (const node of state.originals) {
+    container.appendChild(node);
   }
 
-  if (state.originalStyle == null) {
-    container.style.overflow = "";
-    container.style.display = "";
-    container.style.position = "";
-  } else {
-    container.setAttribute("style", state.originalStyle);
-  }
+  // Clear inline styles
+  container.style.overflow = "";
+  container.style.display = "";
+  container.style.position = "";
 
   instances.delete(container);
 }
 
-function refresh(state) {
-  state.settings = readSettings(state.container);
-  // Animation continues with new settings
+function updateSize(state) {
+  stop(state);
+
+  // Remove clones
+  state.items = state.items.filter(item => !item.isClone);
+
+  // Re-measure and clone
+  state.totalWidth = measureAndClone(state);
+
+  // Reset positions
+  resetPositions(state);
+
+  // Restart if appropriate
+  if (state.isIntersecting && !state.isHovered) {
+    start(state);
+  }
 }
 
-function rescan(root = document) {
-  const found = queryTargets(root);
-
-  // Detach disconnected or removed elements
-  for (const el of instances.keys()) {
-    if (!el.isConnected) {
-      detach(el);
-      continue;
-    }
-    if (root !== document && !root.contains(el)) {
-      detach(el);
-      continue;
-    }
-    if ((root === document || root.contains(el)) && !el.hasAttribute('data-marquee')) {
-      detach(el);
-    }
+function init() {
+  if (initialized) return;
+  initialized = true;
+  for (const target of queryTargets(document)) {
+    attach(target);
   }
+}
 
-  // Attach or refresh found elements
-  for (const el of found) {
-    attach(el);
+function rescan() {
+  for (const target of queryTargets(document)) {
+    attach(target);
+  }
+}
+
+if (typeof window !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
   }
 }
 
 export const Marquee = { attach, detach, rescan };
-
-export function init() {
-  if (initialized) return;
-  initialized = true;
-  if (typeof window !== "undefined") window.Marquee = Marquee;
-  Marquee.rescan();
-}
-
-export default { init, Marquee };
