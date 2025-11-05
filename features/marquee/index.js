@@ -103,30 +103,22 @@ function measureAndClone(state) {
     item.width = rect.width;
     maxHeight = Math.max(maxHeight, rect.height);
     originalWidth += item.width;
-    if (i < originalItems.length - 1) {
-      originalWidth += gap;
-    }
+    // Include gap after each item (including the last one for repeating pattern)
+    originalWidth += gap;
   }
 
   // Set wrapper height to tallest item
   wrapper.style.height = `${maxHeight}px`;
 
-  // Clone strategy: need enough items to ensure continuous coverage
-  // even when original items exit and are being reprojected
-  // Minimum: viewport width + 2x original width (for smooth reprojection buffer)
-  const minWidth = marqueeWidth + originalWidth * 2;
+  // Clone strategy: Create 2 complete cycles minimum for seamless reprojection
+  // This ensures when items reproject, there's always coverage
   const clonedItems = [];
 
-  // Clone complete sets of original items until we have enough coverage
-  while (items.length + clonedItems.length < 100) {
-    // Calculate current coverage
-    let currentCoverage = originalWidth;
-    const numCompleteSets = Math.floor(clonedItems.length / originalItems.length);
-    currentCoverage += numCompleteSets * originalWidth;
+  // Always create at least 2 complete cycles (original + 2 clone sets)
+  const minCycles = 3;
+  const numCloneSets = Math.max(minCycles - 1, Math.ceil(marqueeWidth / originalWidth) + 1);
 
-    if (currentCoverage >= minWidth) break;
-
-    // Clone one complete set
+  for (let set = 0; set < numCloneSets; set++) {
     for (const originalItem of originalItems) {
       const clonedNode = originalItem.original.cloneNode(true);
       deepRemoveIds(clonedNode);
@@ -297,17 +289,16 @@ function resetPositions(state) {
     const item = state.items[i];
     item.baseOffset = accumulated;
     item.projectionOffset = 0;
-    // Position item at its baseOffset
-    item.element.style.transform = `translateX(${item.baseOffset}px)`;
+    // Position item at its baseOffset using translate3d for hardware acceleration
+    item.element.style.transform = `translate3d(${item.baseOffset}px, 0, 0)`;
     accumulated += item.width + (i < state.items.length - 1 ? gap : 0);
   }
 
-  // Calculate original width (used for cloning strategy)
+  // Calculate original width (used for reprojection)
+  // Include gap after each item for repeating pattern
   for (let i = 0; i < originalItems.length; i++) {
     originalAccumulated += originalItems[i].width;
-    if (i < originalItems.length - 1) {
-      originalAccumulated += gap;
-    }
+    originalAccumulated += gap;
   }
 
   // Update widths and wrapper width
@@ -347,9 +338,8 @@ function tick(state, timestamp) {
 
   // Reproject items as they exit viewport
   const containerWidth = state.container.getBoundingClientRect().width;
-  // Reprojection distance: place item after all currently laid-out items
-  // This ensures the item appears at "the other end" of the ticker
-  const reprojectionDistance = state.totalWidth + state.gap;
+  // Reprojection distance: one complete cycle (originalWidth already includes trailing gap)
+  const reprojectionDistance = state.originalWidth;
 
   for (const item of state.items) {
     // Calculate item's visual position
@@ -372,8 +362,9 @@ function tick(state, timestamp) {
 
     // Apply transform: base position + global progress + individual reprojection
     // Items all start at left: 0, so transform must include baseOffset
+    // Use translate3d for hardware acceleration
     const transformOffset = item.baseOffset + state.progress + item.projectionOffset;
-    item.element.style.transform = `translateX(${transformOffset}px)`;
+    item.element.style.transform = `translate3d(${transformOffset}px, 0, 0)`;
   }
 
   // Schedule next frame
