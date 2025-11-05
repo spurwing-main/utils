@@ -40,24 +40,23 @@ function createStructure(container) {
   // Only wrap element nodes, skip text nodes (whitespace)
   const originals = Array.from(container.children);
 
-  // Wrapper stays at origin - items move individually
+  // Wrapper is positioned container for absolute items
   const wrapper = document.createElement("div");
   Object.assign(wrapper.style, {
+    position: "relative",
     display: "flex",
-    flexWrap: "nowrap",
     width: "max-content",
-    gap: "inherit",
   });
 
-  // Items in normal flex flow, each with individual transform
+  // Items absolutely positioned, each with individual offset
   const items = [];
   for (const node of originals) {
     const itemContainer = document.createElement("div");
     Object.assign(itemContainer.style, {
-      display: "flex",
-      flexWrap: "nowrap",
-      gap: "inherit",
-      flexShrink: "0",
+      position: "absolute",
+      top: "0",
+      left: "0",
+      display: "inline-flex",
       willChange: "transform",
     });
     itemContainer.appendChild(node);
@@ -66,7 +65,7 @@ function createStructure(container) {
     items.push({
       element: itemContainer,
       width: 0,
-      baseOffset: 0, // Natural position in sequence
+      baseOffset: 0, // Base position in sequence
       projectionOffset: 0, // Reprojection offset (±totalWidth)
       isClone: false,
       original: node,
@@ -91,11 +90,17 @@ function measureAndClone(state) {
 
   // Measure original items
   let totalWidth = 0;
+  let maxHeight = 0;
   for (const item of items) {
     if (item.isClone) continue;
-    item.width = item.element.getBoundingClientRect().width;
+    const rect = item.element.getBoundingClientRect();
+    item.width = rect.width;
+    maxHeight = Math.max(maxHeight, rect.height);
     totalWidth += item.width;
   }
+
+  // Set wrapper height to tallest item
+  wrapper.style.height = `${maxHeight}px`;
 
   // Only clone enough to fill viewport + small buffer
   // Item reprojection eliminates need for 2x cloning
@@ -113,10 +118,10 @@ function measureAndClone(state) {
 
       const clone = document.createElement("div");
       Object.assign(clone.style, {
-        display: "flex",
-        flexWrap: "nowrap",
-        gap: "inherit",
-        flexShrink: "0",
+        position: "absolute",
+        top: "0",
+        left: "0",
+        display: "inline-flex",
         willChange: "transform",
       });
       clone.appendChild(clonedNode);
@@ -175,13 +180,22 @@ function attach(container) {
   // Measure and create minimal clones
   state.totalWidth = measureAndClone(state);
 
+  // Get gap value from container
+  const computedStyle = window.getComputedStyle(container);
+  const gap = parseFloat(computedStyle.gap) || 0;
+  state.gap = gap;
+
   // Calculate base offsets (natural position in sequence)
   let accumulated = 0;
-  for (const item of state.items) {
+  for (let i = 0; i < state.items.length; i++) {
+    const item = state.items[i];
     item.baseOffset = accumulated;
     item.projectionOffset = 0;
-    accumulated += item.width;
+    accumulated += item.width + (i < state.items.length - 1 ? gap : 0);
   }
+
+  // Update totalWidth to include gaps
+  state.totalWidth = accumulated;
 
   // Viewport awareness - pause when off-screen
   state.intersectionObserver = new IntersectionObserver((entries) => {
@@ -247,14 +261,19 @@ function attach(container) {
 }
 
 function resetPositions(state) {
-  // Reset projection offsets and recalculate base offsets
+  // Reset projection offsets and recalculate base offsets with gaps
+  const gap = state.gap || 0;
   let accumulated = 0;
-  for (const item of state.items) {
+  for (let i = 0; i < state.items.length; i++) {
+    const item = state.items[i];
     item.baseOffset = accumulated;
     item.projectionOffset = 0;
-    item.element.style.transform = "translateX(0px)";
-    accumulated += item.width;
+    // Position item at its baseOffset
+    item.element.style.transform = `translateX(${item.baseOffset}px)`;
+    accumulated += item.width + (i < state.items.length - 1 ? gap : 0);
   }
+  // Update totalWidth
+  state.totalWidth = accumulated;
   state.progress = 0;
 }
 
@@ -291,8 +310,7 @@ function tick(state, timestamp) {
 
   for (const item of state.items) {
     // Calculate item's visual position
-    // baseOffset is natural position in flex flow
-    // Items are already at baseOffset, so visual = baseOffset + progress + projectionOffset
+    // All items at left: 0, positioned via transform
     const visualPosition = item.baseOffset + state.progress + item.projectionOffset;
 
     if (state.settings.direction === 1) {
@@ -309,9 +327,9 @@ function tick(state, timestamp) {
       }
     }
 
-    // Apply transform relative to natural position
-    // Items are already at baseOffset in flex flow, so only apply progress + projection
-    const transformOffset = state.progress + item.projectionOffset;
+    // Apply transform: base position + global progress + individual reprojection
+    // Items all start at left: 0, so transform must include baseOffset
+    const transformOffset = item.baseOffset + state.progress + item.projectionOffset;
     item.element.style.transform = `translateX(${transformOffset}px)`;
   }
 
