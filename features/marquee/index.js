@@ -40,24 +40,22 @@ function createStructure(container) {
   // Only wrap element nodes, skip text nodes (whitespace)
   const originals = Array.from(container.children);
 
-  // Wrapper is positioned container for absolute items
+  // Wrapper moves as a unit - will be animated via transform
   const wrapper = document.createElement("div");
   Object.assign(wrapper.style, {
     position: "relative",
-    display: "block",
-    width: "0px", // Will be set after measurement
+    display: "flex",
+    gap: "inherit", // Inherit gap from container
+    width: "max-content",
+    willChange: "transform",
   });
 
-  // Items absolutely positioned, each with individual offset
+  // Items flow naturally in flexbox - no absolute positioning needed
   const items = [];
   for (const node of originals) {
     const itemContainer = document.createElement("div");
     Object.assign(itemContainer.style, {
-      position: "absolute",
-      top: "0",
-      left: "0",
-      display: "inline-flex",
-      willChange: "transform",
+      flexShrink: "0",
     });
     itemContainer.appendChild(node);
     wrapper.appendChild(itemContainer);
@@ -65,8 +63,7 @@ function createStructure(container) {
     items.push({
       element: itemContainer,
       width: 0,
-      baseOffset: 0, // Base position in sequence
-      projectionOffset: 0, // Reprojection offset (±totalWidth)
+      offset: 0, // Item's position within the wrapper
       isClone: false,
       original: node,
     });
@@ -94,42 +91,27 @@ function measureAndClone(state) {
 
   // Measure original items
   let originalWidth = 0;
-  let maxHeight = 0;
   const originalItems = items.filter(item => !item.isClone);
 
-  for (let i = 0; i < originalItems.length; i++) {
-    const item = originalItems[i];
+  for (const item of originalItems) {
     const rect = item.element.getBoundingClientRect();
     item.width = rect.width;
-    maxHeight = Math.max(maxHeight, rect.height);
-    originalWidth += item.width;
-    // Include gap after each item (including the last one for repeating pattern)
-    originalWidth += gap;
+    originalWidth += item.width + gap;
   }
 
-  // Set wrapper height to tallest item
-  wrapper.style.height = `${maxHeight}px`;
-
-  // Clone strategy: Create 2 complete cycles minimum for seamless reprojection
-  // This ensures when items reproject, there's always coverage
+  // Clone enough times to fill at least 3x the viewport width
+  // This ensures seamless looping with plenty of buffer
+  const minWidth = marqueeWidth * 3;
   const clonedItems = [];
 
-  // Always create at least 2 complete cycles (original + 2 clone sets)
-  const minCycles = 3;
-  const numCloneSets = Math.max(minCycles - 1, Math.ceil(marqueeWidth / originalWidth) + 1);
-
-  for (let set = 0; set < numCloneSets; set++) {
+  while (originalWidth * (1 + clonedItems.length / originalItems.length) < minWidth) {
     for (const originalItem of originalItems) {
       const clonedNode = originalItem.original.cloneNode(true);
       deepRemoveIds(clonedNode);
 
       const clone = document.createElement("div");
       Object.assign(clone.style, {
-        position: "absolute",
-        top: "0",
-        left: "0",
-        display: "inline-flex",
-        willChange: "transform",
+        flexShrink: "0",
       });
       clone.appendChild(clonedNode);
       clone.setAttribute("aria-hidden", "true");
@@ -138,9 +120,8 @@ function measureAndClone(state) {
 
       clonedItems.push({
         element: clone,
-        baseOffset: 0, // Will be set in resetPositions
-        projectionOffset: 0,
         width: originalItem.width,
+        offset: 0,
         isClone: true,
         original: clonedNode,
       });
@@ -149,16 +130,14 @@ function measureAndClone(state) {
 
   items.push(...clonedItems);
 
-  // Calculate totalWidth: all items with gaps between them (no trailing gap)
-  let totalWidth = 0;
-  for (let i = 0; i < items.length; i++) {
-    totalWidth += items[i].width;
-    if (i < items.length - 1) {
-      totalWidth += gap;
-    }
+  // Measure all items and calculate offsets
+  let offset = 0;
+  for (const item of items) {
+    item.offset = offset;
+    offset += item.width + gap;
   }
 
-  return { originalWidth, totalWidth };
+  return { originalWidth, totalWidth: offset - gap };
 }
 
 function attach(container) {
@@ -279,33 +258,28 @@ function attach(container) {
 }
 
 function resetPositions(state) {
-  // Reset projection offsets and recalculate base offsets with gaps
-  const gap = state.gap || 0;
-  let accumulated = 0;
-  let originalAccumulated = 0;
-  const originalItems = state.items.filter(item => !item.isClone);
-
-  for (let i = 0; i < state.items.length; i++) {
-    const item = state.items[i];
-    item.baseOffset = accumulated;
-    item.projectionOffset = 0;
-    // Position item at its baseOffset using translate3d for hardware acceleration
-    item.element.style.transform = `translate3d(${item.baseOffset}px, 0, 0)`;
-    accumulated += item.width + (i < state.items.length - 1 ? gap : 0);
-  }
-
-  // Calculate original width (used for reprojection)
-  // Include gap after each item for repeating pattern
-  for (let i = 0; i < originalItems.length; i++) {
-    originalAccumulated += originalItems[i].width;
-    originalAccumulated += gap;
-  }
-
-  // Update widths and wrapper width
-  state.originalWidth = originalAccumulated;
-  state.totalWidth = accumulated;
-  state.wrapper.style.width = `${accumulated}px`;
+  // Reset wrapper position
   state.progress = 0;
+  state.wrapper.style.transform = "translate3d(0, 0, 0)";
+
+  // Recalculate item offsets
+  const gap = state.gap || 0;
+  let offset = 0;
+
+  for (const item of state.items) {
+    item.offset = offset;
+    offset += item.width + gap;
+  }
+
+  // Calculate original width for looping
+  const originalItems = state.items.filter(item => !item.isClone);
+  let originalWidth = 0;
+  for (const item of originalItems) {
+    originalWidth += item.width + gap;
+  }
+
+  state.originalWidth = originalWidth;
+  state.totalWidth = offset - gap;
 }
 
 function start(state) {
@@ -336,36 +310,22 @@ function tick(state, timestamp) {
   const velocity = -state.settings.speed * state.settings.direction;
   state.progress += (velocity * deltaTime) / 1000;
 
-  // Reproject items as they exit viewport
-  const containerWidth = state.container.getBoundingClientRect().width;
-  // Reprojection distance: one complete cycle (originalWidth already includes trailing gap)
-  const reprojectionDistance = state.originalWidth;
-
-  for (const item of state.items) {
-    // Calculate item's visual position
-    // All items at left: 0, positioned via transform
-    const visualPosition = item.baseOffset + state.progress + item.projectionOffset;
-
-    if (state.settings.direction === 1) {
-      // Moving left - item exits on left, reappears on right
-      if (visualPosition + item.width < 0) {
-        // Item completely off-screen left, teleport to right by one sequence length
-        item.projectionOffset += reprojectionDistance;
-      }
-    } else {
-      // Moving right - item exits on right, reappears on left
-      if (visualPosition > containerWidth) {
-        // Item completely off-screen right, teleport to left by one sequence length
-        item.projectionOffset -= reprojectionDistance;
-      }
+  // Loop wrapper position seamlessly at one cycle length
+  // This creates infinite scrolling without any visible jump
+  if (state.settings.direction === 1) {
+    // Moving left
+    if (state.progress <= -state.originalWidth) {
+      state.progress += state.originalWidth;
     }
-
-    // Apply transform: base position + global progress + individual reprojection
-    // Items all start at left: 0, so transform must include baseOffset
-    // Use translate3d for hardware acceleration
-    const transformOffset = item.baseOffset + state.progress + item.projectionOffset;
-    item.element.style.transform = `translate3d(${transformOffset}px, 0, 0)`;
+  } else {
+    // Moving right
+    if (state.progress >= state.originalWidth) {
+      state.progress -= state.originalWidth;
+    }
   }
+
+  // Update wrapper transform - ONLY ONE STYLE CHANGE PER FRAME
+  state.wrapper.style.transform = `translate3d(${state.progress}px, 0, 0)`;
 
   // Schedule next frame
   state.rafId = requestAnimationFrame((ts) => tick(state, ts));
