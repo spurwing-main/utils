@@ -44,8 +44,8 @@ function createStructure(container) {
   const wrapper = document.createElement("div");
   Object.assign(wrapper.style, {
     position: "relative",
-    display: "flex",
-    width: "max-content",
+    display: "block",
+    width: "0px", // Will be set after measurement
   });
 
   // Items absolutely positioned, each with individual offset
@@ -88,15 +88,24 @@ function measureAndClone(state) {
   const { wrapper, items, container } = state;
   const marqueeWidth = container.getBoundingClientRect().width;
 
+  // Get gap value from container
+  const computedStyle = window.getComputedStyle(container);
+  const gap = parseFloat(computedStyle.gap) || 0;
+
   // Measure original items
-  let totalWidth = 0;
+  let originalWidth = 0;
   let maxHeight = 0;
-  for (const item of items) {
-    if (item.isClone) continue;
+  const originalItems = items.filter(item => !item.isClone);
+
+  for (let i = 0; i < originalItems.length; i++) {
+    const item = originalItems[i];
     const rect = item.element.getBoundingClientRect();
     item.width = rect.width;
     maxHeight = Math.max(maxHeight, rect.height);
-    totalWidth += item.width;
+    originalWidth += item.width;
+    if (i < originalItems.length - 1) {
+      originalWidth += gap;
+    }
   }
 
   // Set wrapper height to tallest item
@@ -104,13 +113,12 @@ function measureAndClone(state) {
 
   // Only clone enough to fill viewport + small buffer
   // Item reprojection eliminates need for 2x cloning
-  const minWidth = marqueeWidth + totalWidth * 0.5;
-  let currentWidth = totalWidth;
+  const minWidth = marqueeWidth + originalWidth * 0.5;
+  let currentWidth = originalWidth;
   const clonedItems = [];
 
   while (currentWidth < minWidth && items.length + clonedItems.length < 50) {
-    for (const originalItem of items) {
-      if (originalItem.isClone) continue;
+    for (const originalItem of originalItems) {
       if (currentWidth >= minWidth) break;
 
       const clonedNode = originalItem.original.cloneNode(true);
@@ -138,12 +146,12 @@ function measureAndClone(state) {
         original: clonedNode,
       });
 
-      currentWidth += originalItem.width;
+      currentWidth += originalItem.width + gap;
     }
   }
 
   items.push(...clonedItems);
-  return totalWidth;
+  return { originalWidth, totalWidth: currentWidth };
 }
 
 function attach(container) {
@@ -168,6 +176,7 @@ function attach(container) {
     signal,
     progress: 0, // Overall progress in pixels
     totalWidth: 0,
+    originalWidth: 0, // Width of original items only (for reprojection)
     lastTimestamp: 0,
     rafId: null,
     isIntersecting: true,
@@ -177,13 +186,15 @@ function attach(container) {
     intersectionObserver: null,
   };
 
-  // Measure and create minimal clones
-  state.totalWidth = measureAndClone(state);
-
   // Get gap value from container
   const computedStyle = window.getComputedStyle(container);
   const gap = parseFloat(computedStyle.gap) || 0;
   state.gap = gap;
+
+  // Measure and create minimal clones
+  const { originalWidth, totalWidth } = measureAndClone(state);
+  state.originalWidth = originalWidth;
+  state.totalWidth = totalWidth;
 
   // Calculate base offsets (natural position in sequence)
   let accumulated = 0;
@@ -194,8 +205,8 @@ function attach(container) {
     accumulated += item.width + (i < state.items.length - 1 ? gap : 0);
   }
 
-  // Update totalWidth to include gaps
-  state.totalWidth = accumulated;
+  // Set wrapper width to total accumulated width
+  wrapper.style.width = `${accumulated}px`;
 
   // Viewport awareness - pause when off-screen
   state.intersectionObserver = new IntersectionObserver((entries) => {
@@ -264,6 +275,9 @@ function resetPositions(state) {
   // Reset projection offsets and recalculate base offsets with gaps
   const gap = state.gap || 0;
   let accumulated = 0;
+  let originalAccumulated = 0;
+  const originalItems = state.items.filter(item => !item.isClone);
+
   for (let i = 0; i < state.items.length; i++) {
     const item = state.items[i];
     item.baseOffset = accumulated;
@@ -272,8 +286,19 @@ function resetPositions(state) {
     item.element.style.transform = `translateX(${item.baseOffset}px)`;
     accumulated += item.width + (i < state.items.length - 1 ? gap : 0);
   }
-  // Update totalWidth
+
+  // Calculate original width (used for cloning strategy)
+  for (let i = 0; i < originalItems.length; i++) {
+    originalAccumulated += originalItems[i].width;
+    if (i < originalItems.length - 1) {
+      originalAccumulated += gap;
+    }
+  }
+
+  // Update widths and wrapper width
+  state.originalWidth = originalAccumulated;
   state.totalWidth = accumulated;
+  state.wrapper.style.width = `${accumulated}px`;
   state.progress = 0;
 }
 
@@ -307,6 +332,8 @@ function tick(state, timestamp) {
 
   // Reproject items as they exit viewport
   const containerWidth = state.container.getBoundingClientRect().width;
+  // Reprojection distance: total width + gap (to appear after all current items)
+  const reprojectionDistance = state.totalWidth + state.gap;
 
   for (const item of state.items) {
     // Calculate item's visual position
@@ -317,13 +344,15 @@ function tick(state, timestamp) {
       // Moving left - item exits on left, reappears on right
       if (visualPosition + item.width < 0) {
         // Item completely off-screen left, teleport to right
-        item.projectionOffset += state.totalWidth;
+        // Reproject to appear after all current items
+        item.projectionOffset += reprojectionDistance;
       }
     } else {
       // Moving right - item exits on right, reappears on left
       if (visualPosition > containerWidth) {
         // Item completely off-screen right, teleport to left
-        item.projectionOffset -= state.totalWidth;
+        // Reproject to appear before all current items
+        item.projectionOffset -= reprojectionDistance;
       }
     }
 
@@ -365,11 +394,17 @@ function detach(container) {
 function updateSize(state) {
   stop(state);
 
-  // Remove clones
+  // Remove clone elements from DOM and items array
+  const clones = state.items.filter(item => item.isClone);
+  for (const clone of clones) {
+    clone.element.remove();
+  }
   state.items = state.items.filter(item => !item.isClone);
 
   // Re-measure and clone
-  state.totalWidth = measureAndClone(state);
+  const { originalWidth, totalWidth } = measureAndClone(state);
+  state.originalWidth = originalWidth;
+  state.totalWidth = totalWidth;
 
   // Reset positions
   resetPositions(state);
