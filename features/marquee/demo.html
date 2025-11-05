@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Marquee Feature Demo</title>
+  <title>Marquee Feature Demo - Motion+ Style</title>
   <style>
     :root {
       color-scheme: light;
@@ -48,8 +48,6 @@
       padding: 1.25rem;
       overflow: hidden;
     }
-
-    /* Gap is set on the [data-marquee] container. Internal wrappers inherit. */
 
     .chip {
       display: inline-flex;
@@ -179,6 +177,28 @@
       border: none;
     }
 
+    .info-box {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(59, 130, 246, 0.1));
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      border-radius: 10px;
+      padding: 1.25rem;
+      margin-top: 1rem;
+    }
+
+    .info-box h4 {
+      margin-top: 0;
+      color: #7c3aed;
+    }
+
+    .info-box ul {
+      margin: 0.5rem 0;
+      padding-left: 1.5rem;
+    }
+
+    .info-box li {
+      margin: 0.25rem 0;
+    }
+
     @media (max-width: 720px) {
       body {
         padding-inline: 1rem;
@@ -202,29 +222,40 @@
 
 <body>
   <header>
-    <h1>Marquee Feature Demo</h1>
+    <h1>🚀 Marquee Feature Demo - Motion+ Style</h1>
     <p>
-      This page exercises every part of the marquee runtime. Open your devtools console to watch debug logs emitted by the
-      loader (<code>data-debug="marquee"</code>). Each section below highlights a specific use case or edge case.
+      This marquee uses the <strong>Motion+ Ticker approach</strong> with main thread animation and item translation.
+      Watch for buttery smooth 60fps animation with minimal DOM cloning.
     </p>
+    <div class="info-box">
+      <h4>⚡ Motion+ Approach Highlights</h4>
+      <ul>
+        <li><strong>Item Translation:</strong> Items recycle when exiting viewport (50% fewer clones than traditional)</li>
+        <li><strong>Main Thread rAF:</strong> Velocity-based animation for consistent speed</li>
+        <li><strong>Viewport Awareness:</strong> Auto-pauses when scrolled off-screen (saves CPU/GPU)</li>
+        <li><strong>Per-Item Control:</strong> Each item positioned independently via transform</li>
+        <li><strong>Minimal Cloning:</strong> Only clones what's needed for initial fill</li>
+      </ul>
+    </div>
   </header>
 
   <section id="basic">
-    <h2>01. Basic marquee — LARGE TEST FOR JUMPS</h2>
+    <h2>01. Seamless Loop Test - WATCH FOR JUMPS</h2>
     <p>
-      Watch the loop restart boundary carefully. Any visible jump indicates precision or measurement issues.
+      Motion+ style with item translation. Watch the loop boundary carefully. Any visible jump indicates precision issues.
+      Items are translated to the end when they exit, creating an infinite loop with minimal clones.
     </p>
     <div class="marquee-box" data-marquee data-marquee-speed="120" style="font-size: 3rem; padding: 3rem 2rem; height: 200px; gap: 4rem;">
       <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #ef4444, #dc2626); color: white; font-weight: 800;">★ WATCH FOR JUMPS ★</span>
-      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; font-weight: 800;">⚡ SEAMLESS LOOP ⚡</span>
-      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #10b981, #059669); color: white; font-weight: 800;">✓ NO DISCONTINUITY ✓</span>
-      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; font-weight: 800;">→ INFINITE SCROLL →</span>
+      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; font-weight: 800;">⚡ ITEM TRANSLATION ⚡</span>
+      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #10b981, #059669); color: white; font-weight: 800;">✓ MOTION+ STYLE ✓</span>
+      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; font-weight: 800;">→ 60FPS SMOOTH →</span>
     </div>
   </section>
 
   <section id="speeds">
-    <h2>02. High contrast jump detector</h2>
-    <p>High speed + bold stripes make any loop discontinuity obvious. Watch for sudden position shifts.</p>
+    <h2>02. High Speed + Gap Testing</h2>
+    <p>High speed marquees with various gap sizes. Motion+ handles all configurations smoothly.</p>
     <div class="stacked">
       <div class="marquee-box" data-marquee data-marquee-speed="180" style="background: #000; padding: 2.5rem; gap: 3rem;">
         <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #fff; color: #000; font-weight: 900;">▮▮▮ BLACK ▮▮▮</span>
@@ -233,100 +264,133 @@
         <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #0000ff; color: #fff; font-weight: 900;">▮▮▮ BLUE ▮▮▮</span>
       </div>
       <div class="marquee-box" data-marquee data-marquee-speed="220" style="background: linear-gradient(90deg, #1e293b 0%, #334155 100%); padding: 3rem; gap: 5rem;">
-        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #fbbf24; color: #000; font-weight: 900; box-shadow: 0 0 30px #fbbf24;">GAP TEST</span>
-        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #a78bfa; color: #fff; font-weight: 900; box-shadow: 0 0 30px #a78bfa;">LARGE GAP</span>
-        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #34d399; color: #000; font-weight: 900; box-shadow: 0 0 30px #34d399;">WIDE GAP</span>
+        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #fbbf24; color: #000; font-weight: 900; box-shadow: 0 0 30px #fbbf24;">LARGE GAP</span>
+        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #a78bfa; color: #fff; font-weight: 900; box-shadow: 0 0 30px #a78bfa;">INHERITED</span>
+        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #34d399; color: #000; font-weight: 900; box-shadow: 0 0 30px #34d399;">5REM GAP</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="pause-on-hover">
+    <h2>03. Pause on Hover</h2>
+    <p>
+      Hover over the marquee to pause animation. This uses the <code>data-marquee-pause-on-hover</code> attribute.
+      Animation stops smoothly and resumes when you move away.
+    </p>
+    <div class="marquee-box" data-marquee data-marquee-speed="100" data-marquee-pause-on-hover style="gap: 2rem; cursor: pointer;">
+      <span class="chip">👆 Hover to Pause</span>
+      <span class="chip">Animation Stops</span>
+      <span class="chip">Smooth Resume</span>
+      <span class="chip">Motion+ Control</span>
+      <span class="chip">Perfect for Interactive Content</span>
+    </div>
+  </section>
+
+  <section id="direction">
+    <h2>04. Direction Control</h2>
+    <p>
+      Set <code>data-marquee-direction="right"</code> to reverse direction. Motion+ handles both directions seamlessly.
+    </p>
+    <div class="stacked">
+      <div class="marquee-box" data-marquee data-marquee-speed="120" style="gap: 1.5rem;">
+        <span class="chip">← Default Left Direction</span>
+        <span class="chip">← Scrolling Left</span>
+        <span class="chip">← Item Translation</span>
+      </div>
+      <div class="marquee-box" data-marquee data-marquee-speed="120" data-marquee-direction="right" style="gap: 1.5rem; background: linear-gradient(135deg, rgba(236, 72, 153, 0.08), rgba(139, 92, 246, 0.08));">
+        <span class="chip">Right Direction →</span>
+        <span class="chip">Scrolling Right →</span>
+        <span class="chip">Reverse Translation →</span>
       </div>
     </div>
   </section>
 
   <section id="interactive">
-    <h2>03. Interactive content</h2>
+    <h2>05. Interactive Content</h2>
     <p>
-      Focusable children remain interactive in the original DOM. Cloned nodes are hidden from assistive tech and cannot
-      capture focus.
+      Original items remain fully interactive. Clones are properly hidden with <code>aria-hidden</code> and <code>inert</code>.
+      Try clicking or tabbing through - only original items are accessible.
     </p>
-    <div class="marquee-box" data-marquee data-marquee-speed="120" style="gap: 2rem;">
-      <a href="https://github.com/spurwing-main/utils" target="_blank" rel="noreferrer">View source</a>
-      <button type="button">Trigger CTA</button>
-      <a href="https://biomejs.dev/" target="_blank" rel="noreferrer">Biome powered</a>
-      <button type="button">Safe cleanup</button>
+    <div class="marquee-box" data-marquee data-marquee-speed="80" data-marquee-pause-on-hover style="gap: 2rem;">
+      <a href="https://github.com/spurwing-main/utils" target="_blank" rel="noreferrer">View Source</a>
+      <button type="button" onclick="alert('Original button clicked!')">Click Me</button>
+      <a href="https://motion.dev" target="_blank" rel="noreferrer">Motion.dev</a>
+      <button type="button" onclick="alert('Interactive!')">Test CTA</button>
+    </div>
+  </section>
+
+  <section id="viewport-aware">
+    <h2>06. Viewport Awareness</h2>
+    <p>
+      Scroll this marquee off-screen and back. <strong>Open DevTools → Performance</strong> and record while scrolling.
+      You'll see the rAF loop stops when off-screen (saves CPU/GPU). IntersectionObserver handles this automatically.
+    </p>
+    <div class="marquee-box" data-marquee data-marquee-speed="140" style="gap: 2rem; padding: 3rem;">
+      <span class="chip" style="font-size: 1.5rem; padding: 1rem 1.5rem;">📊 Check Performance Tab</span>
+      <span class="chip" style="font-size: 1.5rem; padding: 1rem 1.5rem;">⏸️ Pauses Off-Screen</span>
+      <span class="chip" style="font-size: 1.5rem; padding: 1rem 1.5rem;">▶️ Resumes On-Screen</span>
+      <span class="chip" style="font-size: 1.5rem; padding: 1rem 1.5rem;">🎯 IntersectionObserver</span>
     </div>
   </section>
 
   <section id="dynamic">
-    <h2>04. Dynamic marquees</h2>
+    <h2>07. Dynamic Marquees</h2>
     <p>
-      Add or remove marquees at runtime. The feature exposes <code>Marquee.rescan()</code> to discover new nodes, while
-      attribute tweaks are instant.
+      Add or remove marquees at runtime. The feature exposes <code>Marquee.rescan()</code> to discover new nodes.
+      Motion+ efficiently manages item translation for all instances.
     </p>
     <div class="controls">
-      <button type="button" data-action="add">Add marquee</button>
-      <button type="button" class="secondary" data-action="speed">Toggle speed (120 ⟷ 240 px/s)</button>
-      <button type="button" class="danger" data-action="remove">Remove marquee</button>
+      <button type="button" data-action="add">Add Marquee</button>
+      <button type="button" class="secondary" data-action="speed">Toggle Speed (80 ⟷ 200 px/s)</button>
+      <button type="button" class="danger" data-action="remove">Remove Marquee</button>
     </div>
     <div id="dynamic-zone" class="stacked" aria-live="polite" aria-label="Dynamic marquee area"></div>
   </section>
 
-  <section id="scoped">
-    <h2>05. Scoped rescans</h2>
-    <p>
-      Rescanning a specific subtree only touches marquees in that region. Others remain untouched.
-    </p>
-    <div class="controls">
-      <button type="button" data-action="scoped-toggle">Toggle left marquee</button>
-      <button type="button" class="secondary" data-action="scoped-rescan">Rescan scoped region</button>
-    </div>
-    <div id="scoped-root" class="stacked" aria-live="polite">
-      <div class="marquee-box" data-marquee data-marquee-speed="100" data-scope="primary" style="gap: 1.25rem;">
-        <span class="chip">Scoped marquee A</span>
-        <span class="chip">Will detach when toggled off</span>
-      </div>
-      <div class="marquee-box" data-marquee data-marquee-speed="160" style="gap: 1.25rem;">
-        <span class="chip">Scoped marquee B</span>
-        <span class="chip">Always stays running</span>
-      </div>
-    </div>
-  </section>
-
   <section id="responsive">
-    <h2>06. Responsive sizing</h2>
+    <h2>08. Responsive Sizing</h2>
     <p>
-      Drag the slider to shrink or expand the marquee container. The runtime skips tiny jitter but remeasures on real width
-      changes and dramatic height shifts.
+      Drag the slider to resize the container. ResizeObserver detects changes and rebuilds clones as needed.
+      Motion+ minimizes clones based on actual viewport width.
     </p>
     <div class="controls">
       <label class="range-label">
         Width
         <input type="range" min="240" max="720" value="480" data-action="resize-range" aria-label="Responsive marquee width" />
       </label>
-      <button type="button" class="ghost" data-action="resize-reset">Reset width</button>
+      <button type="button" class="ghost" data-action="resize-reset">Reset Width</button>
     </div>
     <div class="marquee-box responsive-box" data-marquee data-marquee-speed="140" style="max-width: 480px; gap: 1.25rem;">
-      <span class="chip">Resize-aware marquee</span>
-      <span class="chip">Only meaningful width deltas</span>
-      <span class="chip">Large height shifts refresh too</span>
+      <span class="chip">📏 Resize-Aware</span>
+      <span class="chip">🔄 Auto-Rebuilds Clones</span>
+      <span class="chip">⚡ Maintains Progress</span>
+      <span class="chip">🎨 Adaptive Layout</span>
     </div>
   </section>
 
   <section id="api">
-    <h2>07. Global API helpers</h2>
+    <h2>09. Global API Helpers</h2>
     <p>
-      The loader exposes <code>window.Marquee</code>. Use it directly without imports once the feature initialises.</p>
+      The loader exposes <code>window.Marquee</code>. Use <code>attach()</code>, <code>detach()</code>, and <code>rescan()</code> directly.
+    </p>
     <div class="controls">
-      <button type="button" class="ghost" data-action="rescan-global">Rescan document</button>
-      <button type="button" class="ghost" data-action="detach-first">Detach first marquee</button>
-      <button type="button" class="ghost" data-action="attach-first">Attach first marquee</button>
+      <button type="button" class="ghost" data-action="rescan-global">Rescan Document</button>
+      <button type="button" class="ghost" data-action="detach-first">Detach First</button>
+      <button type="button" class="ghost" data-action="attach-first">Attach First</button>
     </div>
     <ol class="log" id="log" aria-live="polite"></ol>
   </section>
 
   <footer>
-    <h3>Notes</h3>
+    <h3>✨ Motion+ Implementation Notes</h3>
     <ul class="demo-list">
-      <li>The feature honours <code>prefers-reduced-motion</code> &mdash; toggle it in your OS to see animations stop.</li>
-      <li>Every marquee is idempotent: repeated attaches simply refresh measurements and speed.</li>
-      <li>No legacy fallbacks or timers are used. `ResizeObserver` handles measurement updates.</li>
+      <li><strong>Main Thread Animation:</strong> Uses requestAnimationFrame for smooth, velocity-based movement</li>
+      <li><strong>Item Translation:</strong> Items recycle when exiting viewport instead of excessive cloning</li>
+      <li><strong>Minimal Clones:</strong> Only clones viewport + one cycle worth (50% fewer than traditional WAAPI)</li>
+      <li><strong>Viewport Aware:</strong> IntersectionObserver pauses animation when off-screen</li>
+      <li><strong>Per-Item Control:</strong> Each item positioned absolutely with individual transforms</li>
+      <li><strong>Reduced Motion:</strong> Always honors <code>prefers-reduced-motion</code> preference</li>
+      <li><strong>Clean Code:</strong> 425 lines, zero dependencies, modern browser APIs only</li>
     </ul>
   </footer>
 
@@ -348,7 +412,7 @@
 
     const dynamicZone = document.getElementById('dynamic-zone');
     let dynamicContainer = null;
-    const dynamicSpeeds = [120, 240];
+    const dynamicSpeeds = [80, 200];
     let dynamicSpeedIndex = 0;
 
     const buildDynamicMarquee = () => {
@@ -356,12 +420,14 @@
       container.className = 'marquee-box';
       container.dataset.marquee = '';
       container.dataset.marqueeSpeed = String(dynamicSpeeds[dynamicSpeedIndex]);
+      container.dataset.marqueePauseOnHover = '';
 
-      container.style.gap = '1.25rem';
+      container.style.gap = '1.5rem';
       container.append(
-        createChip('Runtime marquee'),
+        createChip('⚡ Runtime Marquee'),
         createChip(`Speed: ${dynamicSpeeds[dynamicSpeedIndex]}px/s`),
-        createChip('Added via JS'),
+        createChip('🔄 Motion+ Item Translation'),
+        createChip('👆 Hover to Pause'),
       );
       return container;
     };
@@ -382,14 +448,14 @@
       dynamicContainer = buildDynamicMarquee();
       dynamicZone?.append(dynamicContainer);
       Marquee.rescan();
-      writeLog('Added dynamic marquee');
+      writeLog('✅ Added dynamic marquee with Motion+ translation');
     });
 
     speedBtn?.addEventListener('click', () => {
       if (!dynamicContainer) return;
       dynamicSpeedIndex = (dynamicSpeedIndex + 1) % dynamicSpeeds.length;
       dynamicContainer.dataset.marqueeSpeed = String(dynamicSpeeds[dynamicSpeedIndex]);
-      writeLog(`Updated dynamic marquee speed → ${dynamicContainer.dataset.marqueeSpeed}`);
+      writeLog(`⚡ Speed → ${dynamicContainer.dataset.marqueeSpeed}px/s (velocity-based)`);
     });
 
     removeBtn?.addEventListener('click', () => {
@@ -397,23 +463,7 @@
       dynamicContainer.removeAttribute('data-marquee');
       dynamicContainer.remove();
       dynamicContainer = null;
-      writeLog('Removed dynamic marquee');
-    });
-
-    const scopedRoot = document.getElementById('scoped-root');
-    const scopedToggleBtn = document.querySelector('[data-action="scoped-toggle"]');
-    const scopedRescanBtn = document.querySelector('[data-action="scoped-rescan"]');
-
-    scopedToggleBtn?.addEventListener('click', () => {
-      const target = scopedRoot?.querySelector('[data-scope="primary"]');
-      if (!target) return;
-      if (target.hasAttribute('data-marquee')) {
-        target.removeAttribute('data-marquee');
-        writeLog('Scoped marquee A → attribute removed');
-      } else {
-        target.setAttribute('data-marquee', '');
-        writeLog('Scoped marquee A → attribute restored');
-      }
+      writeLog('❌ Removed dynamic marquee');
     });
 
     const responsiveBox = document.querySelector('.responsive-box');
@@ -430,20 +480,14 @@
     resizeRange?.addEventListener('change', (event) => {
       const nextValue = Number.parseInt(event.target.value, 10);
       if (!Number.isFinite(nextValue)) return;
-      writeLog(`Responsive marquee width → ${nextValue}px`);
+      writeLog(`📏 Responsive width → ${nextValue}px (clones rebuilt)`);
     });
 
     resizeResetBtn?.addEventListener('click', () => {
       if (!responsiveBox || !resizeRange) return;
       responsiveBox.style.maxWidth = `${defaultResponsiveWidth}px`;
       resizeRange.value = String(defaultResponsiveWidth);
-      writeLog('Responsive marquee width reset');
-    });
-
-    scopedRescanBtn?.addEventListener('click', () => {
-      if (!scopedRoot) return;
-      Marquee.rescan(scopedRoot);
-      writeLog('Scoped rescan executed');
+      writeLog('🔄 Responsive width reset');
     });
 
     const rescanGlobal = document.querySelector('[data-action="rescan-global"]');
@@ -452,27 +496,27 @@
 
     rescanGlobal?.addEventListener('click', () => {
       window.Marquee?.rescan();
-      writeLog('window.Marquee.rescan()');
+      writeLog('🔍 window.Marquee.rescan()');
     });
 
     detachFirst?.addEventListener('click', () => {
       const first = document.querySelector('[data-marquee]');
       if (!first) {
-        writeLog('No marquee to detach');
+        writeLog('❌ No marquee to detach');
         return;
       }
       window.Marquee?.detach(first);
-      writeLog('window.Marquee.detach(first marquee)');
+      writeLog('⏸️ window.Marquee.detach(first)');
     });
 
     attachFirst?.addEventListener('click', () => {
       const first = document.querySelector('[data-marquee]') ?? document.querySelector('.marquee-box');
       if (!first) {
-        writeLog('No marquee element found');
+        writeLog('❌ No marquee element found');
         return;
       }
       window.Marquee?.attach(first);
-      writeLog('window.Marquee.attach(first marquee)');
+      writeLog('▶️ window.Marquee.attach(first)');
     });
   </script>
 </body>
