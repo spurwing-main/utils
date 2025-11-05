@@ -66,7 +66,8 @@ function createStructure(container) {
     items.push({
       element: itemContainer,
       width: 0,
-      offset: 0, // Individual item offset for reprojection
+      baseOffset: 0, // Natural position in sequence
+      projectionOffset: 0, // Reprojection offset (±totalWidth)
       isClone: false,
       original: node,
     });
@@ -125,7 +126,8 @@ function measureAndClone(state) {
 
       clonedItems.push({
         element: clone,
-        offset: 0,
+        baseOffset: 0, // Will be set in resetPositions
+        projectionOffset: 0,
         width: originalItem.width,
         isClone: true,
         original: clonedNode,
@@ -173,10 +175,11 @@ function attach(container) {
   // Measure and create minimal clones
   state.totalWidth = measureAndClone(state);
 
-  // Position items initially
+  // Calculate base offsets (natural position in sequence)
   let accumulated = 0;
   for (const item of state.items) {
-    item.offset = accumulated;
+    item.baseOffset = accumulated;
+    item.projectionOffset = 0;
     accumulated += item.width;
   }
 
@@ -244,11 +247,12 @@ function attach(container) {
 }
 
 function resetPositions(state) {
-  // Reset all item positions
+  // Reset projection offsets and recalculate base offsets
   let accumulated = 0;
   for (const item of state.items) {
-    item.offset = accumulated;
-    item.element.style.transform = `translateX(${item.offset}px)`;
+    item.baseOffset = accumulated;
+    item.projectionOffset = 0;
+    item.element.style.transform = "translateX(0px)";
     accumulated += item.width;
   }
   state.progress = 0;
@@ -282,32 +286,33 @@ function tick(state, timestamp) {
   const velocity = -state.settings.speed * state.settings.direction;
   state.progress += (velocity * deltaTime) / 1000;
 
-  // Reproject items
-  // For left movement (direction: 1), items moving off left edge get teleported to right
-  // For right movement (direction: -1), items moving off right edge get teleported to left
+  // Reproject items as they exit viewport
   const containerWidth = state.container.getBoundingClientRect().width;
 
   for (const item of state.items) {
-    // Calculate item's current visual position
-    const itemPosition = item.offset + state.progress;
+    // Calculate item's visual position
+    // baseOffset is natural position in flex flow
+    // Items are already at baseOffset, so visual = baseOffset + progress + projectionOffset
+    const visualPosition = item.baseOffset + state.progress + item.projectionOffset;
 
     if (state.settings.direction === 1) {
       // Moving left - item exits on left, reappears on right
-      if (itemPosition + item.width < 0) {
+      if (visualPosition + item.width < 0) {
         // Item completely off-screen left, teleport to right
-        item.offset += state.totalWidth;
+        item.projectionOffset += state.totalWidth;
       }
     } else {
       // Moving right - item exits on right, reappears on left
-      if (itemPosition > containerWidth) {
+      if (visualPosition > containerWidth) {
         // Item completely off-screen right, teleport to left
-        item.offset -= state.totalWidth;
+        item.projectionOffset -= state.totalWidth;
       }
     }
 
-    // Apply combined transform
-    const finalPosition = item.offset + state.progress;
-    item.element.style.transform = `translateX(${finalPosition}px)`;
+    // Apply transform relative to natural position
+    // Items are already at baseOffset in flex flow, so only apply progress + projection
+    const transformOffset = state.progress + item.projectionOffset;
+    item.element.style.transform = `translateX(${transformOffset}px)`;
   }
 
   // Schedule next frame
