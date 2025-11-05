@@ -42,8 +42,9 @@ function pxPerSecond(width, speed) {
 
 function createStructure(container) {
   const originals = Array.from(container.childNodes);
+  const marqueeWidth = container.getBoundingClientRect().width;
 
-  // Wrapper that will be animated
+  // Wrapper that will be animated - inherits gap from container
   const wrapper = document.createElement("div");
   Object.assign(wrapper.style, {
     display: "flex",
@@ -54,7 +55,7 @@ function createStructure(container) {
     transform: "translateX(0px)",
   });
 
-  // Original content container
+  // Original content container - inherits gap from wrapper
   const originalChild = document.createElement("div");
   Object.assign(originalChild.style, {
     display: "flex",
@@ -64,13 +65,29 @@ function createStructure(container) {
   });
   for (const n of originals) originalChild.appendChild(n);
 
-  // Clone for seamless loop
-  const clonedChild = originalChild.cloneNode(true);
-  deepRemoveIds(clonedChild);
-  clonedChild.setAttribute("aria-hidden", "true");
-  clonedChild.setAttribute("inert", "");
+  wrapper.appendChild(originalChild);
 
-  wrapper.append(originalChild, clonedChild);
+  // Clone until we have at least 2x marquee width for seamless loop
+  const minWidth = Math.max(marqueeWidth * 2, 100); // Minimum 100px to handle edge cases
+  let currentWidth = originalChild.scrollWidth;
+  const clones = [];
+
+  while (currentWidth < minWidth && wrapper.children.length < 50) { // Safety limit
+    const clone = originalChild.cloneNode(true);
+    deepRemoveIds(clone);
+    clone.setAttribute("aria-hidden", "true");
+    clone.setAttribute("inert", "");
+    // Ensure clone inherits gap
+    Object.assign(clone.style, {
+      display: "flex",
+      flexWrap: "nowrap",
+      width: "max-content",
+      gap: "inherit"
+    });
+    wrapper.appendChild(clone);
+    clones.push(clone);
+    currentWidth = wrapper.scrollWidth;
+  }
 
   // Setup container
   Object.assign(container.style, {
@@ -80,7 +97,7 @@ function createStructure(container) {
 
   container.appendChild(wrapper);
 
-  return { wrapper, originalChild, clonedChild, originals };
+  return { wrapper, originalChild, clones, originals };
 }
 
 function attach(container) {
@@ -92,7 +109,7 @@ function attach(container) {
 
   const id = genId();
   const settings = readSettings(container);
-  const { wrapper, originalChild, clonedChild, originals } = createStructure(container);
+  const { wrapper, originalChild, clones, originals } = createStructure(container);
   const originalStyle = container.getAttribute("style");
 
   const ac = (typeof window !== "undefined" && window.AbortController)
@@ -109,7 +126,7 @@ function attach(container) {
     container,
     wrapper,
     originalChild,
-    clonedChild,
+    clones,
     originals,
     originalStyle,
     settings,
@@ -119,17 +136,19 @@ function attach(container) {
     signal,
     animation: null,
     childWidth: 0,
+    wrapperWidth: 0,
     playing: true,
     initialized: false,
     resizeObserver: null,
   };
 
-  // Setup ResizeObserver
+  // Setup ResizeObserver for both container and content
   state.resizeObserver = new ResizeObserver(() => {
     if (!instances.has(container)) return;
     updateSize(state);
   });
-  state.resizeObserver.observe(originalChild);
+  state.resizeObserver.observe(container); // Watch marquee container size
+  state.resizeObserver.observe(originalChild); // Watch content size
 
   // Listen for reduced motion changes
   reducedQuery.addEventListener?.("change", () => {
@@ -170,19 +189,22 @@ function attach(container) {
 
   // Initialize
   state.childWidth = originalChild.offsetWidth;
+  state.wrapperWidth = wrapper.scrollWidth;
   state.initialized = true;
   start(state);
 }
 
 function start(state, startProgress) {
-  if (!state.childWidth || state.reducedMotion) return;
+  if (!state.wrapperWidth || state.reducedMotion) return;
 
-  const { wrapper, settings, childWidth } = state;
+  const { wrapper, settings, wrapperWidth } = state;
 
   // Cancel existing animation
   state.animation?.cancel();
 
-  const duration = pxPerSecond(childWidth, settings.speed);
+  // Animate half the wrapper width for seamless loop
+  // (first half and second half are identical due to cloning)
+  const duration = pxPerSecond(wrapperWidth / 2, settings.speed);
   const direction = settings.direction;
 
   const keyframes = direction === 1
@@ -208,24 +230,50 @@ function start(state, startProgress) {
 function updateSize(state) {
   if (!state.initialized || !state.originalChild) return;
 
-  const newWidth = state.originalChild.offsetWidth;
+  const newChildWidth = state.originalChild.offsetWidth;
+  const marqueeWidth = state.container.getBoundingClientRect().width;
+  const currentWrapperWidth = state.wrapper.scrollWidth;
+  const minWidth = Math.max(marqueeWidth * 2, 100);
 
-  if (newWidth !== state.childWidth && newWidth > 0) {
-    // Get current progress before restarting
+  // Check if we need to rebuild clones
+  const contentChanged = newChildWidth !== state.childWidth && newChildWidth > 0;
+  const needsMoreClones = currentWrapperWidth < minWidth;
+
+  if (contentChanged || needsMoreClones) {
+    // Get current progress before rebuilding
     const currentProgress = state.animation?.effect?.getComputedTiming()?.progress;
 
-    state.childWidth = newWidth;
+    state.childWidth = newChildWidth;
 
-    // Recreate clone with new content
-    if (state.clonedChild && state.clonedChild.parentNode === state.wrapper) {
-      state.wrapper.removeChild(state.clonedChild);
+    // Remove all existing clones
+    for (const clone of state.clones) {
+      if (clone.parentNode === state.wrapper) {
+        state.wrapper.removeChild(clone);
+      }
+    }
+    state.clones = [];
+
+    // Rebuild clones until we have sufficient width
+    let currentWidth = state.originalChild.scrollWidth;
+    while (currentWidth < minWidth && state.wrapper.children.length < 50) {
+      const clone = state.originalChild.cloneNode(true);
+      deepRemoveIds(clone);
+      clone.setAttribute("aria-hidden", "true");
+      clone.setAttribute("inert", "");
+      // Ensure clone inherits gap
+      Object.assign(clone.style, {
+        display: "flex",
+        flexWrap: "nowrap",
+        width: "max-content",
+        gap: "inherit"
+      });
+      state.wrapper.appendChild(clone);
+      state.clones.push(clone);
+      currentWidth = state.wrapper.scrollWidth;
     }
 
-    state.clonedChild = state.originalChild.cloneNode(true);
-    deepRemoveIds(state.clonedChild);
-    state.clonedChild.setAttribute("aria-hidden", "true");
-    state.clonedChild.setAttribute("inert", "");
-    state.wrapper.appendChild(state.clonedChild);
+    // Update wrapper width
+    state.wrapperWidth = state.wrapper.scrollWidth;
 
     // Restart animation maintaining progress
     start(state, currentProgress);
