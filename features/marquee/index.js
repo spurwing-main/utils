@@ -39,16 +39,17 @@ function deepRemoveIds(el) {
 function createStructure(container) {
   const originals = Array.from(container.childNodes);
 
-  // Wrapper holds absolutely positioned items
+  // Wrapper that moves as a whole (like traditional approach)
   const wrapper = document.createElement("div");
   Object.assign(wrapper.style, {
     display: "flex",
-    position: "relative",
+    flexWrap: "nowrap",
     width: "max-content",
     gap: "inherit",
+    willChange: "transform",
   });
 
-  // Create item containers - each positioned absolutely
+  // Items stay in normal flex flow
   const items = [];
   for (const node of originals) {
     const itemContainer = document.createElement("div");
@@ -56,17 +57,14 @@ function createStructure(container) {
       display: "flex",
       flexWrap: "nowrap",
       gap: "inherit",
-      position: "absolute",
-      left: "0",
-      top: "0",
-      willChange: "transform",
+      flexShrink: "0",
     });
     itemContainer.appendChild(node);
     wrapper.appendChild(itemContainer);
 
     items.push({
       element: itemContainer,
-      baseOffset: 0,
+      offset: 0, // Additional offset for teleporting
       width: 0,
       isClone: false,
       original: node,
@@ -89,18 +87,15 @@ function measureAndClone(state) {
   const { wrapper, items, container } = state;
   const marqueeWidth = container.getBoundingClientRect().width;
 
-  // Measure original items and position them
+  // Measure items
   let totalWidth = 0;
   for (const item of items) {
     if (item.isClone) continue;
-
-    item.element.style.transform = `translateX(${totalWidth}px)`;
     item.width = item.element.getBoundingClientRect().width;
-    item.baseOffset = totalWidth;
     totalWidth += item.width;
   }
 
-  // Clone only if needed to fill viewport + one cycle for smooth looping
+  // Clone until we have enough to fill viewport + one cycle
   const minWidth = marqueeWidth + totalWidth;
   let currentWidth = totalWidth;
   const clonedItems = [];
@@ -115,10 +110,7 @@ function measureAndClone(state) {
         display: "flex",
         flexWrap: "nowrap",
         gap: "inherit",
-        position: "absolute",
-        left: "0",
-        top: "0",
-        willChange: "transform",
+        flexShrink: "0",
       });
 
       const clonedNode = originalItem.original.cloneNode(true);
@@ -131,7 +123,7 @@ function measureAndClone(state) {
 
       clonedItems.push({
         element: clone,
-        baseOffset: currentWidth,
+        offset: 0,
         width: originalItem.width,
         isClone: true,
         original: clonedNode,
@@ -174,7 +166,7 @@ function attach(container) {
     reducedQuery,
     ac,
     signal,
-    offset: 0,
+    wrapperOffset: 0, // Wrapper's base movement
     totalWidth: 0,
     lastTimestamp: 0,
     rafId: null,
@@ -260,56 +252,34 @@ function tick(state, timestamp) {
   const deltaTime = timestamp - state.lastTimestamp;
   state.lastTimestamp = timestamp;
 
-  // Update offset based on velocity
+  // Update wrapper offset based on velocity
   const velocity = state.settings.speed * state.settings.direction;
-  state.offset += (velocity * deltaTime) / 1000;
+  state.wrapperOffset += (velocity * deltaTime) / 1000;
 
-  // Update item positions
-  updatePositions(state);
+  // Loop wrapper offset
+  const loopPoint = state.totalWidth;
+  if (state.settings.direction === 1) {
+    // Moving left
+    if (state.wrapperOffset <= -loopPoint) {
+      state.wrapperOffset += loopPoint;
+    }
+  } else {
+    // Moving right
+    if (state.wrapperOffset >= loopPoint) {
+      state.wrapperOffset -= loopPoint;
+    }
+  }
+
+  // Apply transform to wrapper
+  state.wrapper.style.transform = `translateX(${state.wrapperOffset}px)`;
 
   // Continue loop
   state.rafId = requestAnimationFrame((ts) => tick(state, ts));
 }
 
-function updatePositions(state) {
-  const { items, offset, totalWidth, settings } = state;
-
-  for (const item of items) {
-    // Calculate current position
-    let position = item.baseOffset + offset;
-
-    // Item translation when exiting viewport
-    if (settings.direction === 1) {
-      // Moving left
-      if (position < -item.width) {
-        // Item exited left - translate to end
-        item.baseOffset += totalWidth;
-        position = item.baseOffset + offset;
-      }
-    } else {
-      // Moving right
-      if (position > totalWidth) {
-        // Item exited right - translate to start
-        item.baseOffset -= totalWidth;
-        position = item.baseOffset + offset;
-      }
-    }
-
-    // Apply transform
-    item.element.style.transform = `translateX(${position}px)`;
-  }
-}
-
 function resetPositions(state) {
-  const { items } = state;
-  state.offset = 0;
-
-  let position = 0;
-  for (const item of items) {
-    item.baseOffset = position;
-    item.element.style.transform = `translateX(${position}px)`;
-    position += item.width;
-  }
+  state.wrapperOffset = 0;
+  state.wrapper.style.transform = `translateX(0px)`;
 }
 
 function startAnimation(state) {
@@ -344,7 +314,7 @@ function updateSize(state) {
 
   // Re-measure and clone
   state.totalWidth = measureAndClone(state);
-  state.offset = 0;
+  state.wrapperOffset = 0;
   resetPositions(state);
 
   // Restart if should be playing
