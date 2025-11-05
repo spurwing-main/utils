@@ -37,7 +37,8 @@ function deepRemoveIds(el) {
 }
 
 function createStructure(container) {
-  const originals = Array.from(container.childNodes);
+  // Only wrap element nodes, skip text nodes (whitespace)
+  const originals = Array.from(container.children);
 
   // Wrapper moves as whole unit
   const wrapper = document.createElement("div");
@@ -252,7 +253,8 @@ function tick(state, timestamp) {
   state.lastTimestamp = timestamp;
 
   // Update wrapper offset based on velocity
-  const velocity = state.settings.speed * state.settings.direction;
+  // Negate velocity so direction: 1 (left) gives negative offset
+  const velocity = -state.settings.speed * state.settings.direction;
   state.wrapperOffset += (velocity * deltaTime) / 1000;
 
   // Loop at original content width for seamless repeat
