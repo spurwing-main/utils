@@ -111,16 +111,23 @@ function measureAndClone(state) {
   // Set wrapper height to tallest item
   wrapper.style.height = `${maxHeight}px`;
 
-  // Only clone enough to fill viewport + small buffer
-  // Item reprojection eliminates need for 2x cloning
-  const minWidth = marqueeWidth + originalWidth * 0.5;
-  let currentWidth = originalWidth;
+  // Clone strategy: need enough items to ensure continuous coverage
+  // even when original items exit and are being reprojected
+  // Minimum: viewport width + 2x original width (for smooth reprojection buffer)
+  const minWidth = marqueeWidth + originalWidth * 2;
   const clonedItems = [];
 
-  while (currentWidth < minWidth && items.length + clonedItems.length < 50) {
-    for (const originalItem of originalItems) {
-      if (currentWidth >= minWidth) break;
+  // Clone complete sets of original items until we have enough coverage
+  while (items.length + clonedItems.length < 100) {
+    // Calculate current coverage
+    let currentCoverage = originalWidth;
+    const numCompleteSets = Math.floor(clonedItems.length / originalItems.length);
+    currentCoverage += numCompleteSets * originalWidth;
 
+    if (currentCoverage >= minWidth) break;
+
+    // Clone one complete set
+    for (const originalItem of originalItems) {
       const clonedNode = originalItem.original.cloneNode(true);
       deepRemoveIds(clonedNode);
 
@@ -145,13 +152,21 @@ function measureAndClone(state) {
         isClone: true,
         original: clonedNode,
       });
-
-      currentWidth += originalItem.width + gap;
     }
   }
 
   items.push(...clonedItems);
-  return { originalWidth, totalWidth: currentWidth };
+
+  // Calculate totalWidth: all items with gaps between them (no trailing gap)
+  let totalWidth = 0;
+  for (let i = 0; i < items.length; i++) {
+    totalWidth += items[i].width;
+    if (i < items.length - 1) {
+      totalWidth += gap;
+    }
+  }
+
+  return { originalWidth, totalWidth };
 }
 
 function attach(container) {
@@ -332,7 +347,8 @@ function tick(state, timestamp) {
 
   // Reproject items as they exit viewport
   const containerWidth = state.container.getBoundingClientRect().width;
-  // Reprojection distance: total width + gap (to appear after all current items)
+  // Reprojection distance: place item after all currently laid-out items
+  // This ensures the item appears at "the other end" of the ticker
   const reprojectionDistance = state.totalWidth + state.gap;
 
   for (const item of state.items) {
@@ -343,15 +359,13 @@ function tick(state, timestamp) {
     if (state.settings.direction === 1) {
       // Moving left - item exits on left, reappears on right
       if (visualPosition + item.width < 0) {
-        // Item completely off-screen left, teleport to right
-        // Reproject to appear after all current items
+        // Item completely off-screen left, teleport to right by one sequence length
         item.projectionOffset += reprojectionDistance;
       }
     } else {
       // Moving right - item exits on right, reappears on left
       if (visualPosition > containerWidth) {
-        // Item completely off-screen right, teleport to left
-        // Reproject to appear before all current items
+        // Item completely off-screen right, teleport to left by one sequence length
         item.projectionOffset -= reprojectionDistance;
       }
     }
