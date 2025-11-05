@@ -1,5 +1,5 @@
-// marquee - Motion+ Ticker style implementation
-// Main thread animation with item translation for minimal cloning
+// marquee - Smooth infinite ticker with minimal cloning
+// Main thread rAF animation with velocity-based movement
 
 const instances = new Map();
 let initialized = false;
@@ -39,7 +39,7 @@ function deepRemoveIds(el) {
 function createStructure(container) {
   const originals = Array.from(container.childNodes);
 
-  // Wrapper that moves as a whole (like traditional approach)
+  // Wrapper moves as whole unit
   const wrapper = document.createElement("div");
   Object.assign(wrapper.style, {
     display: "flex",
@@ -49,7 +49,7 @@ function createStructure(container) {
     willChange: "transform",
   });
 
-  // Items stay in normal flex flow
+  // Items in normal flex flow
   const items = [];
   for (const node of originals) {
     const itemContainer = document.createElement("div");
@@ -64,7 +64,6 @@ function createStructure(container) {
 
     items.push({
       element: itemContainer,
-      offset: 0, // Additional offset for teleporting
       width: 0,
       isClone: false,
       original: node,
@@ -87,17 +86,18 @@ function measureAndClone(state) {
   const { wrapper, items, container } = state;
   const marqueeWidth = container.getBoundingClientRect().width;
 
-  // Measure items
-  let totalWidth = 0;
+  // Measure original items
+  let originalWidth = 0;
   for (const item of items) {
     if (item.isClone) continue;
     item.width = item.element.getBoundingClientRect().width;
-    totalWidth += item.width;
+    originalWidth += item.width;
   }
 
-  // Clone until we have enough to fill viewport + one cycle
-  const minWidth = marqueeWidth + totalWidth;
-  let currentWidth = totalWidth;
+  // For seamless loop, we need at least 2x original content
+  // Plus enough to fill viewport at max offset
+  const minWidth = Math.max(originalWidth * 2, marqueeWidth + originalWidth);
+  let currentWidth = originalWidth;
   const clonedItems = [];
 
   while (currentWidth < minWidth && items.length + clonedItems.length < 50) {
@@ -123,7 +123,6 @@ function measureAndClone(state) {
 
       clonedItems.push({
         element: clone,
-        offset: 0,
         width: originalItem.width,
         isClone: true,
         original: clonedNode,
@@ -134,7 +133,7 @@ function measureAndClone(state) {
   }
 
   items.push(...clonedItems);
-  return totalWidth;
+  return originalWidth;
 }
 
 function attach(container) {
@@ -166,8 +165,8 @@ function attach(container) {
     reducedQuery,
     ac,
     signal,
-    wrapperOffset: 0, // Wrapper's base movement
-    totalWidth: 0,
+    wrapperOffset: 0,
+    originalWidth: 0,
     lastTimestamp: 0,
     rafId: null,
     isIntersecting: true,
@@ -177,8 +176,8 @@ function attach(container) {
     intersectionObserver: null,
   };
 
-  // Measure and create minimal clones
-  state.totalWidth = measureAndClone(state);
+  // Measure and create clones
+  state.originalWidth = measureAndClone(state);
 
   // Viewport awareness - pause when off-screen
   state.intersectionObserver = new IntersectionObserver((entries) => {
@@ -256,17 +255,17 @@ function tick(state, timestamp) {
   const velocity = state.settings.speed * state.settings.direction;
   state.wrapperOffset += (velocity * deltaTime) / 1000;
 
-  // Loop wrapper offset
-  const loopPoint = state.totalWidth;
+  // Loop at original content width for seamless repeat
+  // When we've moved by originalWidth, clones look identical to originals
   if (state.settings.direction === 1) {
     // Moving left
-    if (state.wrapperOffset <= -loopPoint) {
-      state.wrapperOffset += loopPoint;
+    if (state.wrapperOffset <= -state.originalWidth) {
+      state.wrapperOffset += state.originalWidth;
     }
   } else {
     // Moving right
-    if (state.wrapperOffset >= loopPoint) {
-      state.wrapperOffset -= loopPoint;
+    if (state.wrapperOffset >= state.originalWidth) {
+      state.wrapperOffset -= state.originalWidth;
     }
   }
 
@@ -313,7 +312,7 @@ function updateSize(state) {
   state.items = state.items.filter(item => !item.isClone);
 
   // Re-measure and clone
-  state.totalWidth = measureAndClone(state);
+  state.originalWidth = measureAndClone(state);
   state.wrapperOffset = 0;
   resetPositions(state);
 

@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Marquee Feature Demo - Motion+ Style</title>
+  <title>Marquee Feature Demo</title>
   <style>
     :root {
       color-scheme: light;
@@ -222,19 +222,19 @@
 
 <body>
   <header>
-    <h1>🚀 Marquee Feature Demo - Motion+ Style</h1>
+    <h1>🚀 Marquee Feature Demo</h1>
     <p>
-      This marquee uses the <strong>Motion+ Ticker approach</strong> with main thread animation and item translation.
-      Watch for buttery smooth 60fps animation with minimal DOM cloning.
+      This marquee uses main thread animation with efficient cloning strategies.
+      Watch for buttery smooth 60fps animation with minimal DOM overhead.
     </p>
     <div class="info-box">
-      <h4>⚡ Motion+ Approach Highlights</h4>
+      <h4>⚡ Implementation Highlights</h4>
       <ul>
-        <li><strong>Item Translation:</strong> Items recycle when exiting viewport (50% fewer clones than traditional)</li>
+        <li><strong>Efficient Cloning:</strong> Smart cloning strategy minimizes DOM nodes</li>
         <li><strong>Main Thread rAF:</strong> Velocity-based animation for consistent speed</li>
         <li><strong>Viewport Awareness:</strong> Auto-pauses when scrolled off-screen (saves CPU/GPU)</li>
-        <li><strong>Per-Item Control:</strong> Each item positioned independently via transform</li>
-        <li><strong>Minimal Cloning:</strong> Only clones what's needed for initial fill</li>
+        <li><strong>Flexible Layout:</strong> Items positioned in flexbox flow with proper gap inheritance</li>
+        <li><strong>Seamless Looping:</strong> Ensures smooth infinite scrolling with no visible jumps</li>
       </ul>
     </div>
   </header>
@@ -242,20 +242,20 @@
   <section id="basic">
     <h2>01. Seamless Loop Test - WATCH FOR JUMPS</h2>
     <p>
-      Motion+ style with item translation. Watch the loop boundary carefully. Any visible jump indicates precision issues.
-      Items are translated to the end when they exit, creating an infinite loop with minimal clones.
+      Watch the loop boundary carefully. Any visible jump indicates precision issues.
+      The wrapper moves continuously while cloned items create an infinite loop effect.
     </p>
     <div class="marquee-box" data-marquee data-marquee-speed="120" style="font-size: 3rem; padding: 3rem 2rem; height: 200px; gap: 4rem;">
       <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #ef4444, #dc2626); color: white; font-weight: 800;">★ WATCH FOR JUMPS ★</span>
-      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; font-weight: 800;">⚡ ITEM TRANSLATION ⚡</span>
-      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #10b981, #059669); color: white; font-weight: 800;">✓ MOTION+ STYLE ✓</span>
+      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; font-weight: 800;">⚡ SEAMLESS LOOP ⚡</span>
+      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #10b981, #059669); color: white; font-weight: 800;">✓ INFINITE SCROLL ✓</span>
       <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; font-weight: 800;">→ 60FPS SMOOTH →</span>
     </div>
   </section>
 
   <section id="speeds">
     <h2>02. High Speed + Gap Testing</h2>
-    <p>High speed marquees with various gap sizes. Motion+ handles all configurations smoothly.</p>
+    <p>High speed marquees with various gap sizes. The implementation handles all configurations smoothly.</p>
     <div class="stacked">
       <div class="marquee-box" data-marquee data-marquee-speed="180" style="background: #000; padding: 2.5rem; gap: 3rem;">
         <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #fff; color: #000; font-weight: 900;">▮▮▮ BLACK ▮▮▮</span>
@@ -281,7 +281,7 @@
       <span class="chip">👆 Hover to Pause</span>
       <span class="chip">Animation Stops</span>
       <span class="chip">Smooth Resume</span>
-      <span class="chip">Motion+ Control</span>
+      <span class="chip">Interactive Control</span>
       <span class="chip">Perfect for Interactive Content</span>
     </div>
   </section>
@@ -289,18 +289,18 @@
   <section id="direction">
     <h2>04. Direction Control</h2>
     <p>
-      Set <code>data-marquee-direction="right"</code> to reverse direction. Motion+ handles both directions seamlessly.
+      Set <code>data-marquee-direction="right"</code> to reverse direction. Both directions work seamlessly.
     </p>
     <div class="stacked">
       <div class="marquee-box" data-marquee data-marquee-speed="120" style="gap: 1.5rem;">
         <span class="chip">← Default Left Direction</span>
         <span class="chip">← Scrolling Left</span>
-        <span class="chip">← Item Translation</span>
+        <span class="chip">← Smooth Movement</span>
       </div>
       <div class="marquee-box" data-marquee data-marquee-speed="120" data-marquee-direction="right" style="gap: 1.5rem; background: linear-gradient(135deg, rgba(236, 72, 153, 0.08), rgba(139, 92, 246, 0.08));">
         <span class="chip">Right Direction →</span>
         <span class="chip">Scrolling Right →</span>
-        <span class="chip">Reverse Translation →</span>
+        <span class="chip">Reverse Movement →</span>
       </div>
     </div>
   </section>
@@ -314,7 +314,7 @@
     <div class="marquee-box" data-marquee data-marquee-speed="80" data-marquee-pause-on-hover style="gap: 2rem;">
       <a href="https://github.com/spurwing-main/utils" target="_blank" rel="noreferrer">View Source</a>
       <button type="button" onclick="alert('Original button clicked!')">Click Me</button>
-      <a href="https://motion.dev" target="_blank" rel="noreferrer">Motion.dev</a>
+      <a href="https://developer.mozilla.org" target="_blank" rel="noreferrer">MDN Web Docs</a>
       <button type="button" onclick="alert('Interactive!')">Test CTA</button>
     </div>
   </section>
@@ -337,7 +337,7 @@
     <h2>07. Dynamic Marquees</h2>
     <p>
       Add or remove marquees at runtime. The feature exposes <code>Marquee.rescan()</code> to discover new nodes.
-      Motion+ efficiently manages item translation for all instances.
+      The implementation efficiently manages animation for all instances.
     </p>
     <div class="controls">
       <button type="button" data-action="add">Add Marquee</button>
@@ -351,7 +351,7 @@
     <h2>08. Responsive Sizing</h2>
     <p>
       Drag the slider to resize the container. ResizeObserver detects changes and rebuilds clones as needed.
-      Motion+ minimizes clones based on actual viewport width.
+      The implementation minimizes clones based on actual viewport width.
     </p>
     <div class="controls">
       <label class="range-label">
@@ -382,15 +382,15 @@
   </section>
 
   <footer>
-    <h3>✨ Motion+ Implementation Notes</h3>
+    <h3>✨ Implementation Notes</h3>
     <ul class="demo-list">
       <li><strong>Main Thread Animation:</strong> Uses requestAnimationFrame for smooth, velocity-based movement</li>
-      <li><strong>Item Translation:</strong> Items recycle when exiting viewport instead of excessive cloning</li>
-      <li><strong>Minimal Clones:</strong> Only clones viewport + one cycle worth (50% fewer than traditional WAAPI)</li>
+      <li><strong>Efficient Cloning:</strong> Smart cloning strategy ensures seamless loops with minimal DOM nodes</li>
+      <li><strong>Wrapper Animation:</strong> Entire wrapper moves as a unit via translateX transform</li>
       <li><strong>Viewport Aware:</strong> IntersectionObserver pauses animation when off-screen</li>
-      <li><strong>Per-Item Control:</strong> Each item positioned absolutely with individual transforms</li>
+      <li><strong>Flexbox Layout:</strong> Items positioned in normal flex flow with inherited gap</li>
       <li><strong>Reduced Motion:</strong> Always honors <code>prefers-reduced-motion</code> preference</li>
-      <li><strong>Clean Code:</strong> 425 lines, zero dependencies, modern browser APIs only</li>
+      <li><strong>Clean Code:</strong> Zero dependencies, modern browser APIs only</li>
     </ul>
   </footer>
 
@@ -426,7 +426,7 @@
       container.append(
         createChip('⚡ Runtime Marquee'),
         createChip(`Speed: ${dynamicSpeeds[dynamicSpeedIndex]}px/s`),
-        createChip('🔄 Motion+ Item Translation'),
+        createChip('🔄 Smooth Animation'),
         createChip('👆 Hover to Pause'),
       );
       return container;
@@ -448,7 +448,7 @@
       dynamicContainer = buildDynamicMarquee();
       dynamicZone?.append(dynamicContainer);
       Marquee.rescan();
-      writeLog('✅ Added dynamic marquee with Motion+ translation');
+      writeLog('✅ Added dynamic marquee with smooth animation');
     });
 
     speedBtn?.addEventListener('click', () => {
