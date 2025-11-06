@@ -190,6 +190,7 @@ function attach(container) {
     isHovered: false,
     resizeObserver: null,
     intersectionObserver: null,
+    resizeTimeout: null, // For debouncing resize
   };
 
   // Batch all geometry/style reads upfront
@@ -208,13 +209,21 @@ function attach(container) {
       if (entry.target === container) {
         state.isIntersecting = entry.isIntersecting;
         if (state.isIntersecting && !state.isHovered) {
+          // Coming into view - play or create animation
           if (state.animation) {
-            resume(state);
+            if (state.isPaused) {
+              state.animation.play();
+              state.isPaused = false;
+            }
           } else {
             start(state);
           }
-        } else {
-          stop(state);
+        } else if (!state.isIntersecting) {
+          // Left viewport - pause
+          if (state.animation && !state.isPaused) {
+            state.animation.pause();
+            state.isPaused = true;
+          }
         }
       }
     }
@@ -223,9 +232,18 @@ function attach(container) {
   });
   state.intersectionObserver.observe(container);
 
-  // Responsive - rebuild on resize
+  // Responsive - rebuild on resize (debounced to prevent jitter)
   state.resizeObserver = new ResizeObserver(() => {
-    updateSize(state);
+    // Clear existing timeout
+    if (state.resizeTimeout) {
+      clearTimeout(state.resizeTimeout);
+    }
+
+    // Debounce resize by 150ms to avoid recreating animation too often
+    state.resizeTimeout = setTimeout(() => {
+      updateSize(state);
+      state.resizeTimeout = null;
+    }, 150);
   });
   state.resizeObserver.observe(container);
 
@@ -233,12 +251,18 @@ function attach(container) {
   if (state.settings.pauseOnHover) {
     container.addEventListener("mouseenter", () => {
       state.isHovered = true;
-      stop(state);
+      if (state.animation && !state.isPaused) {
+        state.animation.pause();
+        state.isPaused = true;
+      }
     }, { signal });
 
     container.addEventListener("mouseleave", () => {
       state.isHovered = false;
-      if (state.isIntersecting && !state.isPaused) resume(state);
+      if (state.animation && state.isPaused && state.isIntersecting) {
+        state.animation.play();
+        state.isPaused = false;
+      }
     }, { signal });
   }
 
@@ -249,10 +273,10 @@ function attach(container) {
     state.settings = next;
 
     if (changed && state.animation) {
-      // Restart animation with new settings
-      stop(state);
+      // Restart animation with new settings (unavoidable)
       state.animation.cancel();
       state.animation = null;
+      state.isPaused = false;
       if (state.isIntersecting && !state.isHovered) {
         start(state);
       }
@@ -334,19 +358,6 @@ function start(state) {
   );
 }
 
-function stop(state) {
-  if (state.animation) {
-    state.animation.pause();
-  }
-  state.isPaused = true;
-}
-
-function resume(state) {
-  if (state.animation && state.isPaused) {
-    state.animation.play();
-    state.isPaused = false;
-  }
-}
 
 function detach(container) {
   const state = instances.get(container);
@@ -356,6 +367,12 @@ function detach(container) {
   if (state.animation) {
     state.animation.cancel();
     state.animation = null;
+  }
+
+  // Clear resize timeout
+  if (state.resizeTimeout) {
+    clearTimeout(state.resizeTimeout);
+    state.resizeTimeout = null;
   }
 
   // Cleanup observers and event listeners
