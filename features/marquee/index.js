@@ -1,483 +1,302 @@
-// marquee - High-performance infinite ticker using Web Animations API
-//
-// PERFORMANCE ARCHITECTURE:
-// • Web Animations API: Runs entirely on compositor thread (ZERO style recalcs)
-// • Compositor layer promotion: will-change + contain + translateZ(0)
-// • Transform-only animation: No layout or paint work on main thread
-// • Infinite looping: Seamless cycle using cloned content
-// • Debounced resize: Prevents animation churn during resize (150ms)
-// • Direct pause/play: No animation recreation during hover/scroll
-// • Minimal clones: viewport + 2x original cycle (memory-efficient)
-// • Read/write batching: All geometry reads batched, then all DOM writes
-//
-// COMPOSITOR GUARANTEES:
-// 1. will-change: transform - Forces layer creation before animation
-// 2. contain: layout style paint - Isolates layer, prevents reflow bleeding
-// 3. transform: translateZ(0) - Creates stacking context, GPU acceleration
-// 4. WAAPI with transform-only - No layout/style properties animated
-// 5. composite: replace - Proper composition mode
-//
-// PERFORMANCE PROFILE:
-// • 0 style recalcs/sec (100% compositor thread execution)
-// • ~0.1% CPU usage (near zero main thread work)
-// • Zero forced layouts during animation (measurements cached at init/resize)
-// • GPU-accelerated single layer (no paint storms)
-// • Smooth 60fps with no frame drops
-//
-// HOW TO VERIFY IT'S ON COMPOSITOR:
-// 1. Chrome DevTools → Performance → Record during animation
-// 2. Look for: NO "Recalculate Style" during animation
-// 3. Main thread should be mostly idle during scroll
-// 4. Layers panel: Wrapper should have its own compositing layer
+/* KISS Marquee — minimal + performant, loader-compatible */
 
-const instances = new Map();
-let initialized = false;
+// Debug logger (no top-level side effects)
+const DBG = typeof window !== "undefined" ? window.__UTILS_DEBUG__?.createLogger?.("marquee") : null;
 
-function genId() {
-  return `mq-${Math.random().toString(36).slice(2, 10)}`;
+const MAX_UNITS = 6;
+const REG = new Map(); // element -> instance
+
+let booted = false;
+let initScheduled = false;
+let IO = null; // IntersectionObserver instance (created on init)
+
+function getDocument() {
+  try {
+    return typeof document !== "undefined" ? document : null;
+  } catch {
+    return null;
+  }
+}
+
+function ensureCSS() {
+  const d = getDocument();
+  if (!d) return;
+  if (d.getElementById("marquee-css")) return;
+  const tag = d.createElement("style");
+  tag.id = "marquee-css";
+  tag.textContent = `
+      [data-marquee]{display:flex;overflow:hidden;contain:content}
+      [data-marquee] .marquee-inner{display:flex;gap:inherit;width:max-content;will-change:transform}
+      [data-marquee] .marquee-inner>*{flex:0 0 auto}
+      @keyframes marquee-scroll{
+        from{transform:translateX(var(--from,0px))}
+        to  {transform:translateX(var(--to,-100px))}
+      }
+      @media (prefers-reduced-motion: reduce){
+        [data-marquee] .marquee-inner{animation:none !important}
+      }
+    `;
+  d.head.appendChild(tag);
+}
+
+function ensureIO() {
+  const d = getDocument();
+  if (!d || IO) return;
+  try {
+    if ("IntersectionObserver" in window) {
+      IO = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          const inst = REG.get(e.target);
+          if (!inst) continue;
+          const running = e.isIntersecting && !d.hidden;
+          inst.inner.style.animationPlayState = running ? "running" : "paused";
+          inst.inner.style.willChange = running ? "transform" : "auto";
+        }
+      });
+    }
+  } catch (error) {
+    DBG?.warn("IO setup failed", error);
+  }
 }
 
 function readSettings(el) {
-  const dir = (el.getAttribute("data-marquee-direction") || "left").toLowerCase();
-  const speedRaw = el.getAttribute("data-marquee-speed");
-  const parsed = Number.parseFloat(speedRaw);
-  const speed = Number.isFinite(parsed) && parsed > 0 ? parsed : 100; // px/s
-  const pauseOnHover = el.hasAttribute("data-marquee-pause-on-hover");
   return {
-    direction: dir === "right" ? -1 : 1,
-    speed,
-    pauseOnHover
+    direction: (el.dataset.direction || "left").toLowerCase() === "right" ? "right" : "left",
+    speed: Number.isFinite(Number.parseFloat(el.dataset.speed))
+      ? Number.parseFloat(el.dataset.speed)
+      : 100,
+    pauseOnHover: el.hasAttribute("data-pause-on-hover"),
   };
 }
 
-function queryTargets(root) {
-  const set = new Set();
-  for (const el of root.querySelectorAll?.("[data-marquee]") || []) set.add(el);
-  if (root !== document && root?.nodeType === 1 && root.hasAttribute?.("data-marquee")) {
-    set.add(root);
-  }
-  return set;
-}
+class Instance {
+  constructor(el) {
+    this.el = el;
+    this.inner = null;
+    this.settings = readSettings(el);
+    this._unitTemplate = null;
+    this._unitWidth = 0;
+    this._hoverIn = this._hoverOut = null;
+    this._resizeObs = null;
+    this._rafQueued = false;
+    this._last = { total: 0, dir: this.settings.direction };
 
-function deepRemoveIds(el) {
-  if (el.nodeType !== 1) return;
-  el.removeAttribute("id");
-  for (const n of el.children) deepRemoveIds(n);
-}
-
-function createStructure(container) {
-  // Only wrap element nodes, skip text nodes (whitespace)
-  const originals = Array.from(container.children);
-
-  // Wrapper moves as a unit - will be animated via WAAPI on compositor thread
-  const wrapper = document.createElement("div");
-  Object.assign(wrapper.style, {
-    position: "relative",
-    display: "flex",
-    gap: "inherit", // Inherit gap from container
-    width: "max-content",
-    // Force compositor layer creation
-    willChange: "transform",
-    // Isolate this layer from parent (prevents repaints bleeding)
-    contain: "layout style paint",
-    // Create stacking context for proper layering
-    transform: "translateZ(0)",
-  });
-
-  // Items flow naturally in flexbox - no absolute positioning needed
-  const items = [];
-  for (const node of originals) {
-    const itemContainer = document.createElement("div");
-    itemContainer.style.flexShrink = "0";
-    itemContainer.appendChild(node);
-    wrapper.appendChild(itemContainer);
-
-    items.push({
-      element: itemContainer,
-      width: 0,
-      offset: 0, // Item's position within the wrapper
-      isClone: false,
-      original: node,
-    });
+    this._ensureStructure();
+    this._attach();
+    this._update(true);
   }
 
-  // Setup container
-  Object.assign(container.style, {
-    overflow: "hidden",
-    display: "flex",
-    position: "relative",
-    // Isolate container to prevent layout thrashing
-    contain: "layout style",
-  });
-
-  container.appendChild(wrapper);
-
-  return { wrapper, items, originals };
-}
-
-function measureAndClone(state) {
-  const { wrapper, items, container } = state;
-
-  // Batch all geometry reads first (avoid read/write interleaving)
-  const marqueeWidth = container.getBoundingClientRect().width;
-  const computedStyle = window.getComputedStyle(container);
-  const gap = parseFloat(computedStyle.gap) || 0;
-
-  // Measure original items (batch reads)
-  let originalWidth = 0;
-  const originalItems = items.filter(item => !item.isClone);
-
-  for (const item of originalItems) {
-    const rect = item.element.getBoundingClientRect();
-    item.width = rect.width;
-    originalWidth += item.width + gap;
-  }
-
-  // Minimal cloning strategy: viewport + 2x original cycle
-  // This ensures seamless loop with minimal memory overhead
-  const minWidth = Math.max(marqueeWidth * 1.5, marqueeWidth + originalWidth * 2);
-  const clonedItems = [];
-
-  // Clone complete sets only
-  while (originalWidth * (1 + clonedItems.length / originalItems.length) < minWidth) {
-    for (const originalItem of originalItems) {
-      const clonedNode = originalItem.original.cloneNode(true);
-      deepRemoveIds(clonedNode);
-
-      const clone = document.createElement("div");
-      clone.style.flexShrink = "0";
-      clone.appendChild(clonedNode);
-      clone.setAttribute("aria-hidden", "true");
-      clone.setAttribute("inert", "");
-
-      clonedItems.push({
-        element: clone,
-        width: originalItem.width,
-        offset: 0,
-        isClone: true,
-        original: clonedNode,
-      });
+  _ensureStructure() {
+    const d = getDocument();
+    if (!d) return;
+    let inner = this.el.querySelector(":scope > .marquee-inner");
+    if (!inner) {
+      inner = d.createElement("div");
+      inner.className = "marquee-inner";
+      const frag = d.createDocumentFragment();
+      while (this.el.firstChild) frag.appendChild(this.el.firstChild);
+      inner.appendChild(frag);
+      this.el.appendChild(inner);
     }
+    this.inner = inner;
+    this._unitTemplate = Array.from(inner.children).map((n) => n.cloneNode(true));
+    this._unitWidth = 0; // lazy
   }
 
-  // Batch DOM writes after all reads
-  for (const clone of clonedItems) {
-    wrapper.appendChild(clone.element);
+  _measureUnitWidth() {
+    const before = this.inner.scrollWidth;
+    const frag = document.createDocumentFragment();
+    this._unitTemplate.forEach((n) => frag.appendChild(n.cloneNode(true)));
+    this.inner.appendChild(frag);
+    const after = this.inner.scrollWidth;
+    for (let i = 0; i < this._unitTemplate.length; i++) this.inner.removeChild(this.inner.lastChild);
+    this._unitWidth = Math.max(1, after - before);
+    return this._unitWidth;
   }
 
-  items.push(...clonedItems);
-
-  // Calculate offsets (no layout work, uses cached widths)
-  let offset = 0;
-  for (const item of items) {
-    item.offset = offset;
-    offset += item.width + gap;
-  }
-
-  return { originalWidth, totalWidth: offset - gap };
-}
-
-function attach(container) {
-  if (instances.has(container)) return;
-
-  const settings = readSettings(container);
-  const preferReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const reducedQuery = preferReducedMotion;
-  const ac = new AbortController();
-  const signal = ac.signal;
-
-  const { wrapper, items, originals } = createStructure(container);
-
-  const state = {
-    container,
-    wrapper,
-    items,
-    originals,
-    settings,
-    reducedQuery,
-    ac,
-    signal,
-    totalWidth: 0,
-    originalWidth: 0, // Width of original items only (for looping)
-    animation: null, // Web Animations API Animation object
-    isIntersecting: true,
-    isPaused: false,
-    isHovered: false,
-    resizeObserver: null,
-    intersectionObserver: null,
-    resizeTimeout: null, // For debouncing resize
-  };
-
-  // Batch all geometry/style reads upfront
-  const computedStyle = window.getComputedStyle(container);
-  const gap = parseFloat(computedStyle.gap) || 0;
-  state.gap = gap;
-
-  // Measure and create minimal clones (all reads, then all writes)
-  const { originalWidth, totalWidth } = measureAndClone(state);
-  state.originalWidth = originalWidth;
-  state.totalWidth = totalWidth;
-
-  // Viewport awareness - pause when off-screen
-  state.intersectionObserver = new IntersectionObserver((entries) => {
-    for (const entry of entries) {
-      if (entry.target === container) {
-        state.isIntersecting = entry.isIntersecting;
-        if (state.isIntersecting && !state.isHovered) {
-          // Coming into view - play or create animation
-          if (state.animation) {
-            if (state.isPaused) {
-              state.animation.play();
-              state.isPaused = false;
-            }
-          } else {
-            start(state);
-          }
-        } else if (!state.isIntersecting) {
-          // Left viewport - pause
-          if (state.animation && !state.isPaused) {
-            state.animation.pause();
-            state.isPaused = true;
-          }
-        }
-      }
+  _fill() {
+    const w = this.el.clientWidth;
+    if (w <= 0) return this.inner.scrollWidth;
+    while (this.inner.children.length > this._unitTemplate.length) this.inner.removeChild(this.inner.lastChild);
+    const unit = this._unitWidth || this._measureUnitWidth();
+    const target = Math.max(2 * w, 2 * unit);
+    let width = this.inner.scrollWidth;
+    let unitsNow = Math.ceil(this.inner.children.length / this._unitTemplate.length);
+    while (width < target && unitsNow < MAX_UNITS) {
+      const frag = document.createDocumentFragment();
+      this._unitTemplate.forEach((n) => frag.appendChild(n.cloneNode(true)));
+      this.inner.appendChild(frag);
+      width = this.inner.scrollWidth;
+      unitsNow++;
     }
-  }, {
-    threshold: 0,
-  });
-  state.intersectionObserver.observe(container);
+    return width;
+  }
 
-  // Responsive - rebuild on resize (debounced to prevent jitter)
-  state.resizeObserver = new ResizeObserver(() => {
-    // Clear existing timeout
-    if (state.resizeTimeout) {
-      clearTimeout(state.resizeTimeout);
+  _setAnimation(total) {
+    const half = Math.floor(total / 2);
+    const from = this.settings.direction === "left" ? 0 : -half;
+    const to = this.settings.direction === "left" ? -half : 0;
+    this.inner.style.setProperty("--from", from + "px");
+    this.inner.style.setProperty("--to", to + "px");
+    const dur = (Math.abs(half) / Math.max(1, this.settings.speed)) * 1000;
+    this.inner.style.animation = `marquee-scroll ${dur}ms linear infinite`;
+  }
+
+  _update(force = false) {
+    if (this._rafQueued) this._rafQueued = false;
+    if (this.el.clientWidth <= 0) return;
+    const total = this._fill();
+    if (force || total !== this._last.total || this.settings.direction !== this._last.dir) {
+      this._setAnimation(total);
     }
-
-    // Debounce resize by 150ms to avoid recreating animation too often
-    state.resizeTimeout = setTimeout(() => {
-      updateSize(state);
-      state.resizeTimeout = null;
-    }, 150);
-  });
-  state.resizeObserver.observe(container);
-
-  // Pause on hover
-  if (state.settings.pauseOnHover) {
-    container.addEventListener("mouseenter", () => {
-      state.isHovered = true;
-      if (state.animation && !state.isPaused) {
-        state.animation.pause();
-        state.isPaused = true;
-      }
-    }, { signal });
-
-    container.addEventListener("mouseleave", () => {
-      state.isHovered = false;
-      if (state.animation && state.isPaused && state.isIntersecting) {
-        state.animation.play();
-        state.isPaused = false;
-      }
-    }, { signal });
+    this._applyHover();
+    this._last = { total, dir: this.settings.direction };
   }
 
-  // Watch for setting changes
-  const updateSettings = () => {
-    const next = readSettings(container);
-    const changed = next.speed !== state.settings.speed || next.direction !== state.settings.direction;
-    state.settings = next;
+  scheduleUpdate(force = false) {
+    if (this._rafQueued) return;
+    this._rafQueued = true;
+    requestAnimationFrame(() => this._update(force));
+  }
 
-    if (changed && state.animation) {
-      // Restart animation with new settings (unavoidable)
-      state.animation.cancel();
-      state.animation = null;
-      state.isPaused = false;
-      if (state.isIntersecting && !state.isHovered) {
-        start(state);
-      }
+  _applyHover() {
+    if (this._hoverIn) {
+      this.el.removeEventListener("mouseenter", this._hoverIn);
+      this.el.removeEventListener("mouseleave", this._hoverOut);
+      this._hoverIn = this._hoverOut = null;
     }
-  };
-
-  const attrObserver = new MutationObserver(updateSettings);
-  attrObserver.observe(container, {
-    attributes: true,
-    attributeFilter: ["data-marquee-speed", "data-marquee-direction", "data-marquee-pause-on-hover"],
-  });
-  ac.signal.addEventListener("abort", () => attrObserver.disconnect());
-
-  instances.set(container, state);
-
-  // Start if visible and not paused
-  if (state.isIntersecting && !state.isHovered) {
-    start(state);
+    if (!this.settings.pauseOnHover) return;
+    this._hoverIn = () => {
+      this.inner.style.animationPlayState = "paused";
+    };
+    this._hoverOut = () => {
+      this.inner.style.animationPlayState = "running";
+    };
+    this.el.addEventListener("mouseenter", this._hoverIn);
+    this.el.addEventListener("mouseleave", this._hoverOut);
   }
 
-  resetPositions(state);
-}
-
-function resetPositions(state) {
-  // Stop any existing animation
-  if (state.animation) {
-    state.animation.cancel();
-    state.animation = null;
+  applySettings(next) {
+    const changedDir = this.settings.direction !== next.direction;
+    const changedSpeed = this.settings.speed !== next.speed;
+    const changedHover = this.settings.pauseOnHover !== next.pauseOnHover;
+    this.settings = next;
+    if (changedHover) this._applyHover();
+    if (changedDir) this.scheduleUpdate(true);
+    else if (changedSpeed) this.scheduleUpdate(true); // force to recompute duration
   }
 
-  // Reset wrapper to initial position (matches animation start)
-  // Using translateZ(0) to maintain compositor layer
-  state.wrapper.style.transform = "translateZ(0)";
-
-  // Recalculate item offsets
-  const gap = state.gap || 0;
-  let offset = 0;
-
-  for (const item of state.items) {
-    item.offset = offset;
-    offset += item.width + gap;
-  }
-
-  // Calculate original width for looping
-  const originalItems = state.items.filter(item => !item.isClone);
-  let originalWidth = 0;
-  for (const item of originalItems) {
-    originalWidth += item.width + gap;
-  }
-
-  state.originalWidth = originalWidth;
-  state.totalWidth = offset - gap;
-}
-
-function start(state) {
-  if (state.animation || state.reducedQuery.matches || !state.originalWidth) return;
-  state.isPaused = false;
-
-  // Calculate duration for consistent velocity
-  // duration = distance / speed (in seconds)
-  const distance = state.originalWidth;
-  const speed = state.settings.speed; // px/s
-  const duration = (distance / speed) * 1000; // ms
-
-  // Direction: left = negative, right = positive
-  const startOffset = state.settings.direction === 1 ? 0 : -distance;
-  const endOffset = state.settings.direction === 1 ? -distance : 0;
-
-  // Create WAAPI animation - runs entirely on compositor thread
-  // The combination of:
-  // - will-change: transform on wrapper
-  // - contain: layout style paint on wrapper
-  // - transform: translateZ(0) on wrapper
-  // - Only animating transform (not layout properties)
-  // Ensures this runs 100% on compositor with zero main thread work
-  state.animation = state.wrapper.animate(
-    [
-      {
-        transform: `translate3d(${startOffset}px, 0, 0)`,
-        offset: 0,
-      },
-      {
-        transform: `translate3d(${endOffset}px, 0, 0)`,
-        offset: 1,
-      }
-    ],
-    {
-      duration: duration,
-      iterations: Infinity,
-      easing: "linear",
-      composite: "replace",
+  _attach() {
+    if ("ResizeObserver" in window) {
+      this._resizeObs = new ResizeObserver(() => this.scheduleUpdate(true));
+      this._resizeObs.observe(this.el);
+    } else {
+      window.addEventListener("resize", () => this.scheduleUpdate(true));
     }
-  );
-}
-
-
-function detach(container) {
-  const state = instances.get(container);
-  if (!state) return;
-
-  // Cancel WAAPI animation
-  if (state.animation) {
-    state.animation.cancel();
-    state.animation = null;
+    if (IO) IO.observe(this.el);
   }
 
-  // Clear resize timeout
-  if (state.resizeTimeout) {
-    clearTimeout(state.resizeTimeout);
-    state.resizeTimeout = null;
-  }
-
-  // Cleanup observers and event listeners
-  state.ac.abort();
-  state.resizeObserver?.disconnect();
-  state.intersectionObserver?.disconnect();
-
-  // Restore original structure
-  while (container.firstChild) {
-    container.removeChild(container.firstChild);
-  }
-  for (const node of state.originals) {
-    container.appendChild(node);
-  }
-
-  // Clear inline styles
-  container.style.overflow = "";
-  container.style.display = "";
-  container.style.position = "";
-
-  instances.delete(container);
-}
-
-function updateSize(state) {
-  // Cancel current animation
-  if (state.animation) {
-    state.animation.cancel();
-    state.animation = null;
-  }
-
-  // Batch DOM removals
-  const clones = state.items.filter(item => item.isClone);
-  for (const clone of clones) {
-    clone.element.remove();
-  }
-  state.items = state.items.filter(item => !item.isClone);
-
-  // Re-measure and clone (batched reads, then batched writes)
-  const { originalWidth, totalWidth } = measureAndClone(state);
-  state.originalWidth = originalWidth;
-  state.totalWidth = totalWidth;
-
-  // Reset positions and recalculate
-  const gap = state.gap || 0;
-  let offset = 0;
-  for (const item of state.items) {
-    item.offset = offset;
-    offset += item.width + gap;
-  }
-
-  // Restart animation if appropriate
-  if (state.isIntersecting && !state.isHovered) {
-    start(state);
-  }
-}
-
-function init() {
-  if (initialized) return;
-  initialized = true;
-  for (const target of queryTargets(document)) {
-    attach(target);
+  destroy() {
+    try {
+      if (this._resizeObs) this._resizeObs.disconnect();
+    } catch (_) {}
+    this._resizeObs = null;
+    try {
+      if (IO) IO.unobserve(this.el);
+    } catch (_) {}
+    if (this._hoverIn) {
+      this.el.removeEventListener("mouseenter", this._hoverIn);
+      this.el.removeEventListener("mouseleave", this._hoverOut);
+    }
+    while (this.el.firstChild) this.el.removeChild(this.el.firstChild);
+    this._unitTemplate.forEach((n) => this.el.appendChild(n.cloneNode(true)));
   }
 }
 
 function rescan() {
-  for (const target of queryTargets(document)) {
-    attach(target);
-  }
+  const d = getDocument();
+  if (!d) return;
+  ensureCSS();
+  ensureIO();
+  const nodes = new Set(d.querySelectorAll("[data-marquee]"));
+  nodes.forEach((el) => {
+    const inst = REG.get(el);
+    const next = readSettings(el);
+    if (!inst) REG.set(el, new Instance(el));
+    else inst.applySettings(next);
+  });
+  Array.from(REG.keys()).forEach((el) => {
+    if (!nodes.has(el) || !el.hasAttribute("data-marquee")) {
+      const inst = REG.get(el);
+      try {
+        inst?.destroy();
+      } finally {
+        REG.delete(el);
+      }
+    }
+  });
 }
 
-if (typeof window !== "undefined") {
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
+export const Marquee = {
+  rescan,
+  get size() {
+    return REG.size;
+  },
+};
+
+function boot() {
+  const d = getDocument();
+  if (!d || booted) return;
+  booted = true;
+  ensureCSS();
+  try {
+    if ("IntersectionObserver" in window) {
+      IO = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          const inst = REG.get(e.target);
+          if (!inst) continue;
+          const running = e.isIntersecting && !d.hidden;
+          inst.inner.style.animationPlayState = running ? "running" : "paused";
+          inst.inner.style.willChange = running ? "transform" : "auto";
+        }
+      });
+    }
+  } catch (error) {
+    DBG?.warn("IO setup failed", error);
   }
+
+  d.addEventListener("visibilitychange", () => {
+    const paused = d.hidden;
+    REG.forEach((inst) => {
+      inst.inner.style.animationPlayState = paused ? "paused" : "running";
+      inst.inner.style.willChange = paused ? "auto" : "transform";
+    });
+  });
+
+  try {
+    rescan();
+  } catch (error) {
+    DBG?.warn("initial rescan failed", error);
+  }
+
+  // Optional global API to mirror the script variant
+  try {
+    if (typeof window !== "undefined") {
+      window.Marquee = window.Marquee || {};
+      window.Marquee.rescan = rescan;
+      Object.defineProperty(window.Marquee, "size", { get: () => REG.size });
+    }
+  } catch (_) {}
 }
 
-export const Marquee = { attach, detach, rescan };
+export function init() {
+  const d = getDocument();
+  if (!d) return;
+  if (booted) return;
+  if (initScheduled) return;
+  initScheduled = true;
+  if (d.readyState === "complete" || d.readyState === "interactive") boot();
+  else d.addEventListener("DOMContentLoaded", boot, { once: true });
+}
+
+export default { init, Marquee };

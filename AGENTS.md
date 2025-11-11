@@ -8,7 +8,7 @@ This repo favors simple, explicit code. Keep agents tiny, predictable, and easy 
 - Be predictable: no hidden state, no top‑level side effects.
 - Fail loudly (but safely): never swallow errors silently.
 - Idempotent `init()`: multiple calls must be harmless.
-- Stable public surface: no reliance on internals in tests or consumers.
+- Stable public surface: no reliance on internals for consumers.
 
 ## Working Method (always)
 
@@ -46,10 +46,10 @@ Any intentional deviation MUST include an inline `// POLICY-EXCEPTION: <reason>`
 5. **Loader Safety**
    - Loader only accepts validated names (`^[a-z0-9_-]+$`), normalizes to lowercase, and prevents double init.
 
-6. **Lint, Format, Tests**
-   - Biome handles lint + format (see `biome.json`).
-   - Modern JS only: `no-var`, `prefer-const`, arrow callbacks, object shorthand.
-   - Tests assert documented behavior only (idempotence, events, validation).
+6. **Style & Tooling**
+   - No repo‑enforced linter/formatter or tests.
+   - Keep modern JS style: `no-var`, `prefer-const`, arrow callbacks, object shorthand.
+   - Validate behavior via local demos and manual checks.
 
 ## Author Checklist
 
@@ -58,7 +58,7 @@ Any intentional deviation MUST include an inline `// POLICY-EXCEPTION: <reason>`
 - [ ] No silent catches; logs or documented fallbacks present.
 - [ ] Debug logging gated by `__UTILS_DEBUG__`.
 - [ ] README updated if attributes / API / events changed.
-- [ ] Lint/format pass; tests added/updated.
+- [ ] Docs/demo updated if attributes/API/events changed.
 
 ## Structure
 
@@ -87,7 +87,7 @@ Any intentional deviation MUST include an inline `// POLICY-EXCEPTION: <reason>`
 4. Active → listeners/observers attached.
 5. Error → failures are contained and logged.
 
-After edits, test quickly and confirm results (lint, unit tests, local demos where applicable).
+After edits, sanity‑check quickly using local demo pages or minimal HTML.
 
 ## Events
 
@@ -132,7 +132,7 @@ MUST do these, every time:
 - Validate inputs, assumptions, and outputs at each step.
 - Handle errors predictably; never allow silent failures.
 - Use events/async patterns; attach listeners/observers instead of polling.
-- After edits, run lint/tests quickly and confirm results.
+- After edits, verify locally (open demo in a browser).
 
 NEVER do these:
 - Do not use polling or timeouts when proper events/async are available.
@@ -146,7 +146,7 @@ Implementation workflow (strict):
 2. Implement step 1 with the simplest working code; keep functions focused.
 3. Validate inputs/assumptions/outputs; add gated logging if needed.
 4. Repeat for remaining steps; keep hierarchy shallow and explicit.
-5. Run lint/tests; address any failures immediately.
+5. Verify locally in a browser; address issues immediately.
 6. Update docs if attributes/API/events changed.
 
 Validation gates (exit criteria):
@@ -154,4 +154,4 @@ Validation gates (exit criteria):
 - No silent `catch {}`; logging or documented fallback present.
 - Identifiers camelCase; files/dirs lowercase; vertical spacing is clean.
 - No polling/timeouts used where events/async exist.
-- Tests for documented behavior pass locally.
+- Demo flows work as documented; behavior matches README.

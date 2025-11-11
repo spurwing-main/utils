@@ -1,524 +1,132 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Marquee Feature Demo</title>
+    <style>
+      :root { --bg:#0b0d10; --fg:#e8e8e8; --muted:#9aa3ad; --line:#1e2638; --accent:#7bc4ff; }
+      html,body{ margin:0; padding:0; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Helvetica, Arial; }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      header { position: sticky; top: 0; z-index: 10; background: linear-gradient(180deg, rgba(11,13,16,0.95), rgba(11,13,16,0.85)); backdrop-filter: saturate(1.2) blur(6px); padding: 12px 16px; border-bottom: 1px solid var(--line); }
+      header .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+      header .pill { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:#121826; border:1px solid #273247; }
+      header input[type="range"] { width: 160px; }
+      header button, header label { cursor: pointer; }
+      main { padding: 16px; }
+      section { margin-bottom: 24px; }
+      .demo { display: grid; gap: 16px; }
+      .panel { border:1px solid var(--line); border-radius:10px; padding:12px; background:#0f1420; }
+      .marquee-box { border:1px dashed #273247; border-radius:8px; padding:8px; }
+      /* The feature sets display/overflow on the host; we keep text styles here */
+      .marquee-box span { display:inline-flex; align-items:center; gap:8px; padding:0 16px; white-space:nowrap; }
+      .tag { padding:2px 6px; border:1px solid #2a3347; border-radius:999px; color:#b8c0cc; background:#121826; font-size:12px; }
+      .note { color: var(--muted); font-size: 12px; }
+    </style>
 
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Marquee Feature Demo</title>
-  <style>
-    :root {
-      color-scheme: light;
-      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
+    <script>
+      // Debug helper via URL: ?utils-debug=marquee or *=all
+      (function(){
+        try {
+          const dbg = new URL(location.href).searchParams.get('utils-debug');
+          if (dbg != null) localStorage.setItem('utils:debug', dbg);
+        } catch(_){}
+      })();
+    </script>
 
-    body {
-      margin: 0 auto;
-      padding: 2rem 1.5rem 4rem;
-      max-width: 960px;
-      line-height: 1.55;
-      background: #f7f7f8;
-      color: #1f2933;
-    }
+    <!-- Use the loader to auto-init the marquee feature -->
+    <script type="module" src="../../loader.js" data-features="marquee" data-debug="marquee"></script>
 
-    h1,
-    h2,
-    h3 {
-      margin-top: 2.5rem;
-      line-height: 1.2;
-    }
+    <script type="module">
+      import { Marquee } from './index.js';
+      function wireDemo(){
+        const speed = document.getElementById('speed');
+        const speedVal = document.getElementById('speedVal');
+        const toggleDir = document.getElementById('toggleDir');
+        const toggleHover = document.getElementById('toggleHover');
 
-    section {
-      margin-top: 2rem;
-      padding: 1.5rem;
-      border-radius: 12px;
-      background: white;
-      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.06);
-    }
+        function updateSpeed(el){
+          const host = document.querySelector('#exampleA');
+          if (!host || !el) return;
+          host.setAttribute('data-speed', String(el.value));
+          if (speedVal) speedVal.textContent = `${el.value} px/s`;
+          Marquee.rescan(); // attribute change is observed; this is just immediate
+        }
 
-    p {
-      margin-block: 0.75rem;
-    }
+        speed?.addEventListener('input', (e)=> updateSpeed(e.target));
+        if (speed) updateSpeed(speed);
 
-    .marquee-box {
-      position: relative;
-      margin-top: 1rem;
-      border-radius: 10px;
-      border: 1px solid rgba(15, 23, 42, 0.08);
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(16, 185, 129, 0.08));
-      padding: 1.25rem;
-      overflow: hidden;
-    }
+        toggleDir?.addEventListener('click', ()=>{
+          const host = document.querySelector('#exampleB');
+          if (!host) return;
+          host.setAttribute('data-direction', host.getAttribute('data-direction') === 'left' ? 'right' : 'left');
+          Marquee.rescan();
+        });
 
-    .chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.4rem 0.9rem;
-      border-radius: 999px;
-      background: rgba(15, 23, 42, 0.08);
-      backdrop-filter: blur(4px);
-      font-weight: 500;
-    }
-
-    .chip svg {
-      width: 1rem;
-      height: 1rem;
-      color: #0f172a;
-    }
-
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      margin-top: 1rem;
-    }
-
-    .range-label {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      font-weight: 600;
-    }
-
-    .range-label input[type='range'] {
-      width: 220px;
-    }
-
-    button {
-      appearance: none;
-      border: none;
-      border-radius: 999px;
-      padding: 0.65rem 1.2rem;
-      font-size: 0.95rem;
-      font-weight: 600;
-      cursor: pointer;
-      background: #2563eb;
-      color: white;
-      transition: transform 150ms ease, background 150ms ease, box-shadow 150ms ease;
-      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.25);
-    }
-
-    button:hover {
-      transform: translateY(-1px);
-      background: #1d4ed8;
-    }
-
-    button.secondary {
-      background: #334155;
-      box-shadow: 0 10px 24px rgba(51, 65, 85, 0.25);
-    }
-
-    button.danger {
-      background: #dc2626;
-      box-shadow: 0 10px 24px rgba(220, 38, 38, 0.25);
-    }
-
-    button.ghost {
-      background: rgba(15, 23, 42, 0.08);
-      color: #0f172a;
-      box-shadow: none;
-    }
-
-    code {
-      font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-        "Courier New", monospace;
-      background: rgba(15, 23, 42, 0.08);
-      border-radius: 6px;
-      padding: 0.2rem 0.4rem;
-      font-size: 0.95rem;
-    }
-
-    ul.demo-list {
-      display: grid;
-      gap: 0.5rem;
-      padding-left: 1.5rem;
-    }
-
-    .log {
-      margin-top: 1rem;
-      padding: 1rem;
-      border-radius: 10px;
-      background: rgba(15, 23, 42, 0.04);
-      font-family: "JetBrains Mono", monospace;
-      max-height: 220px;
-      overflow: auto;
-    }
-
-    .log li {
-      list-style: none;
-      padding: 0.15rem 0;
-    }
-
-    .stacked {
-      display: grid;
-      gap: 1.25rem;
-    }
-
-    .marquee-box button,
-    .marquee-box a {
-      border-radius: 8px;
-      padding: 0.6rem 1rem;
-      background: rgba(255, 255, 255, 0.8);
-      color: #0f172a;
-      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18);
-      text-decoration: none;
-    }
-
-    .responsive-box {
-      transition: max-width 160ms ease;
-    }
-
-    .marquee-box a:hover {
-      background: rgba(241, 245, 249, 0.95);
-    }
-
-    .marquee-box button {
-      cursor: pointer;
-      border: none;
-    }
-
-    .info-box {
-      background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(59, 130, 246, 0.1));
-      border: 1px solid rgba(139, 92, 246, 0.2);
-      border-radius: 10px;
-      padding: 1.25rem;
-      margin-top: 1rem;
-    }
-
-    .info-box h4 {
-      margin-top: 0;
-      color: #7c3aed;
-    }
-
-    .info-box ul {
-      margin: 0.5rem 0;
-      padding-left: 1.5rem;
-    }
-
-    .info-box li {
-      margin: 0.25rem 0;
-    }
-
-    @media (max-width: 720px) {
-      body {
-        padding-inline: 1rem;
+        toggleHover?.addEventListener('click', ()=>{
+          const host = document.querySelector('#exampleC');
+          if (!host) return;
+          if (host.hasAttribute('data-pause-on-hover')) host.removeAttribute('data-pause-on-hover');
+          else host.setAttribute('data-pause-on-hover','');
+          Marquee.rescan();
+        });
       }
-
-      section {
-        padding: 1.15rem;
-      }
-
-      .controls {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      button {
-        width: 100%;
-      }
-    }
-  </style>
-</head>
-
-<body>
-  <header>
-    <h1>🚀 Marquee Feature Demo</h1>
-    <p>
-      This marquee uses main thread animation with efficient cloning strategies.
-      Watch for buttery smooth 60fps animation with minimal DOM overhead.
-    </p>
-    <div class="info-box">
-      <h4>⚡ Implementation Highlights</h4>
-      <ul>
-        <li><strong>Efficient Cloning:</strong> Smart cloning strategy minimizes DOM nodes</li>
-        <li><strong>Main Thread rAF:</strong> Velocity-based animation for consistent speed</li>
-        <li><strong>Viewport Awareness:</strong> Auto-pauses when scrolled off-screen (saves CPU/GPU)</li>
-        <li><strong>Flexible Layout:</strong> Items positioned in flexbox flow with proper gap inheritance</li>
-        <li><strong>Seamless Looping:</strong> Ensures smooth infinite scrolling with no visible jumps</li>
-      </ul>
-    </div>
-  </header>
-
-  <section id="basic">
-    <h2>01. Seamless Loop Test - WATCH FOR JUMPS</h2>
-    <p>
-      Watch the loop boundary carefully. Any visible jump indicates precision issues.
-      The wrapper moves continuously while cloned items create an infinite loop effect.
-    </p>
-    <div class="marquee-box" data-marquee data-marquee-speed="120" style="font-size: 3rem; padding: 3rem 2rem; height: 200px; gap: 4rem;">
-      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #ef4444, #dc2626); color: white; font-weight: 800;">★ WATCH FOR JUMPS ★</span>
-      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; font-weight: 800;">⚡ SEAMLESS LOOP ⚡</span>
-      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #10b981, #059669); color: white; font-weight: 800;">✓ INFINITE SCROLL ✓</span>
-      <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; font-weight: 800;">→ 60FPS SMOOTH →</span>
-    </div>
-  </section>
-
-  <section id="speeds">
-    <h2>02. High Speed + Gap Testing</h2>
-    <p>High speed marquees with various gap sizes. The implementation handles all configurations smoothly.</p>
-    <div class="stacked">
-      <div class="marquee-box" data-marquee data-marquee-speed="180" style="background: #000; padding: 2.5rem; gap: 3rem;">
-        <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #fff; color: #000; font-weight: 900;">▮▮▮ BLACK ▮▮▮</span>
-        <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #ff0000; color: #fff; font-weight: 900;">▮▮▮ RED ▮▮▮</span>
-        <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #00ff00; color: #000; font-weight: 900;">▮▮▮ GREEN ▮▮▮</span>
-        <span class="chip" style="padding: 1.5rem 2.5rem; font-size: 2rem; background: #0000ff; color: #fff; font-weight: 900;">▮▮▮ BLUE ▮▮▮</span>
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireDemo, { once: true });
+      else wireDemo();
+    </script>
+  </head>
+  <body>
+    <header>
+      <div class="row">
+        <strong>Marquee Feature Demo</strong>
+        <span class="pill"><label for="speed">Speed</label><input id="speed" type="range" min="20" max="300" step="10" value="120" /><span id="speedVal" class="note"></span></span>
+        <span class="pill"><button id="toggleDir">Toggle Direction</button></span>
+        <span class="pill"><button id="toggleHover">Toggle Pause on Hover</button></span>
+        <span class="pill note">Use ?utils-debug=marquee for logs</span>
       </div>
-      <div class="marquee-box" data-marquee data-marquee-speed="220" style="background: linear-gradient(90deg, #1e293b 0%, #334155 100%); padding: 3rem; gap: 5rem;">
-        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #fbbf24; color: #000; font-weight: 900; box-shadow: 0 0 30px #fbbf24;">LARGE GAP</span>
-        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #a78bfa; color: #fff; font-weight: 900; box-shadow: 0 0 30px #a78bfa;">INHERITED</span>
-        <span class="chip" style="padding: 2rem 3rem; font-size: 2.5rem; background: #34d399; color: #000; font-weight: 900; box-shadow: 0 0 30px #34d399;">5REM GAP</span>
-      </div>
-    </div>
-  </section>
+    </header>
+    <main>
+      <section>
+        <h2>Usage</h2>
+        <p>
+          Add <code>data-marquee</code> to a container. The children become one unit that is duplicated to fill space and animated horizontally using transform keyframes.
+          The feature honors <code>prefers-reduced-motion</code> with a static variant.
+          See <a href="README.md" target="_blank">README</a> for full docs.
+        </p>
+      </section>
 
-  <section id="pause-on-hover">
-    <h2>03. Pause on Hover</h2>
-    <p>
-      Hover over the marquee to pause animation. This uses the <code>data-marquee-pause-on-hover</code> attribute.
-      Animation stops smoothly and resumes when you move away.
-    </p>
-    <div class="marquee-box" data-marquee data-marquee-speed="100" data-marquee-pause-on-hover style="gap: 2rem; cursor: pointer;">
-      <span class="chip">👆 Hover to Pause</span>
-      <span class="chip">Animation Stops</span>
-      <span class="chip">Smooth Resume</span>
-      <span class="chip">Interactive Control</span>
-      <span class="chip">Perfect for Interactive Content</span>
-    </div>
-  </section>
+      <section class="demo">
+        <article class="panel">
+          <h3>A. Speed</h3>
+          <p class="note">Adjust the speed control in the header.</p>
+          <div id="exampleA" class="marquee-box" data-marquee data-speed="120">
+            <span><span class="tag">A</span> Fast • Reliable • Delightful</span>
+            <span><span class="tag">A</span> Fast • Reliable • Delightful</span>
+            <span><span class="tag">A</span> Fast • Reliable • Delightful</span>
+          </div>
+        </article>
 
-  <section id="direction">
-    <h2>04. Direction Control</h2>
-    <p>
-      Set <code>data-marquee-direction="right"</code> to reverse direction. Both directions work seamlessly.
-    </p>
-    <div class="stacked">
-      <div class="marquee-box" data-marquee data-marquee-speed="120" style="gap: 1.5rem;">
-        <span class="chip">← Default Left Direction</span>
-        <span class="chip">← Scrolling Left</span>
-        <span class="chip">← Smooth Movement</span>
-      </div>
-      <div class="marquee-box" data-marquee data-marquee-speed="120" data-marquee-direction="right" style="gap: 1.5rem; background: linear-gradient(135deg, rgba(236, 72, 153, 0.08), rgba(139, 92, 246, 0.08));">
-        <span class="chip">Right Direction →</span>
-        <span class="chip">Scrolling Right →</span>
-        <span class="chip">Reverse Movement →</span>
-      </div>
-    </div>
-  </section>
+        <article class="panel">
+          <h3>B. Direction (left/right)</h3>
+          <p class="note">Click “Toggle Direction”.</p>
+          <div id="exampleB" class="marquee-box" data-marquee data-direction="left">
+            <span><span class="tag">B</span> Now shipping • SDK v2.0</span>
+            <span><span class="tag">B</span> Now shipping • SDK v2.0</span>
+            <span><span class="tag">B</span> Now shipping • SDK v2.0</span>
+          </div>
+        </article>
 
-  <section id="interactive">
-    <h2>05. Interactive Content</h2>
-    <p>
-      Original items remain fully interactive. Clones are properly hidden with <code>aria-hidden</code> and <code>inert</code>.
-      Try clicking or tabbing through - only original items are accessible.
-    </p>
-    <div class="marquee-box" data-marquee data-marquee-speed="80" data-marquee-pause-on-hover style="gap: 2rem;">
-      <a href="https://github.com/spurwing-main/utils" target="_blank" rel="noreferrer">View Source</a>
-      <button type="button" onclick="alert('Original button clicked!')">Click Me</button>
-      <a href="https://developer.mozilla.org" target="_blank" rel="noreferrer">MDN Web Docs</a>
-      <button type="button" onclick="alert('Interactive!')">Test CTA</button>
-    </div>
-  </section>
-
-  <section id="viewport-aware">
-    <h2>06. Viewport Awareness</h2>
-    <p>
-      Scroll this marquee off-screen and back. <strong>Open DevTools → Performance</strong> and record while scrolling.
-      You'll see the rAF loop stops when off-screen (saves CPU/GPU). IntersectionObserver handles this automatically.
-    </p>
-    <div class="marquee-box" data-marquee data-marquee-speed="140" style="gap: 2rem; padding: 3rem;">
-      <span class="chip" style="font-size: 1.5rem; padding: 1rem 1.5rem;">📊 Check Performance Tab</span>
-      <span class="chip" style="font-size: 1.5rem; padding: 1rem 1.5rem;">⏸️ Pauses Off-Screen</span>
-      <span class="chip" style="font-size: 1.5rem; padding: 1rem 1.5rem;">▶️ Resumes On-Screen</span>
-      <span class="chip" style="font-size: 1.5rem; padding: 1rem 1.5rem;">🎯 IntersectionObserver</span>
-    </div>
-  </section>
-
-  <section id="dynamic">
-    <h2>07. Dynamic Marquees</h2>
-    <p>
-      Add or remove marquees at runtime. The feature exposes <code>Marquee.rescan()</code> to discover new nodes.
-      The implementation efficiently manages animation for all instances.
-    </p>
-    <div class="controls">
-      <button type="button" data-action="add">Add Marquee</button>
-      <button type="button" class="secondary" data-action="speed">Toggle Speed (80 ⟷ 200 px/s)</button>
-      <button type="button" class="danger" data-action="remove">Remove Marquee</button>
-    </div>
-    <div id="dynamic-zone" class="stacked" aria-live="polite" aria-label="Dynamic marquee area"></div>
-  </section>
-
-  <section id="responsive">
-    <h2>08. Responsive Sizing</h2>
-    <p>
-      Drag the slider to resize the container. ResizeObserver detects changes and rebuilds clones as needed.
-      The implementation minimizes clones based on actual viewport width.
-    </p>
-    <div class="controls">
-      <label class="range-label">
-        Width
-        <input type="range" min="240" max="720" value="480" data-action="resize-range" aria-label="Responsive marquee width" />
-      </label>
-      <button type="button" class="ghost" data-action="resize-reset">Reset Width</button>
-    </div>
-    <div class="marquee-box responsive-box" data-marquee data-marquee-speed="140" style="max-width: 480px; gap: 1.25rem;">
-      <span class="chip">📏 Resize-Aware</span>
-      <span class="chip">🔄 Auto-Rebuilds Clones</span>
-      <span class="chip">⚡ Maintains Progress</span>
-      <span class="chip">🎨 Adaptive Layout</span>
-    </div>
-  </section>
-
-  <section id="api">
-    <h2>09. Global API Helpers</h2>
-    <p>
-      The loader exposes <code>window.Marquee</code>. Use <code>attach()</code>, <code>detach()</code>, and <code>rescan()</code> directly.
-    </p>
-    <div class="controls">
-      <button type="button" class="ghost" data-action="rescan-global">Rescan Document</button>
-      <button type="button" class="ghost" data-action="detach-first">Detach First</button>
-      <button type="button" class="ghost" data-action="attach-first">Attach First</button>
-    </div>
-    <ol class="log" id="log" aria-live="polite"></ol>
-  </section>
-
-  <footer>
-    <h3>✨ Implementation Notes</h3>
-    <ul class="demo-list">
-      <li><strong>Main Thread Animation:</strong> Uses requestAnimationFrame for smooth, velocity-based movement</li>
-      <li><strong>Efficient Cloning:</strong> Smart cloning strategy ensures seamless loops with minimal DOM nodes</li>
-      <li><strong>Wrapper Animation:</strong> Entire wrapper moves as a unit via translateX transform</li>
-      <li><strong>Viewport Aware:</strong> IntersectionObserver pauses animation when off-screen</li>
-      <li><strong>Flexbox Layout:</strong> Items positioned in normal flex flow with inherited gap</li>
-      <li><strong>Reduced Motion:</strong> Always honors <code>prefers-reduced-motion</code> preference</li>
-      <li><strong>Clean Code:</strong> Zero dependencies, modern browser APIs only</li>
-    </ul>
-  </footer>
-
-  <script type="module" src="../../loader.js" data-features="marquee" data-debug="marquee"></script>
-  <script type="module">
-    import { Marquee } from './index.js';
-
-    const logList = document.getElementById('log');
-    const writeLog = (message) => {
-      if (!logList) return;
-      const item = document.createElement('li');
-      const stamp = new Date().toLocaleTimeString();
-      item.textContent = `[${stamp}] ${message}`;
-      logList.prepend(item);
-      while (logList.childElementCount > 12) {
-        logList.removeChild(logList.lastElementChild);
-      }
-    };
-
-    const dynamicZone = document.getElementById('dynamic-zone');
-    let dynamicContainer = null;
-    const dynamicSpeeds = [80, 200];
-    let dynamicSpeedIndex = 0;
-
-    const buildDynamicMarquee = () => {
-      const container = document.createElement('div');
-      container.className = 'marquee-box';
-      container.dataset.marquee = '';
-      container.dataset.marqueeSpeed = String(dynamicSpeeds[dynamicSpeedIndex]);
-      container.dataset.marqueePauseOnHover = '';
-
-      container.style.gap = '1.5rem';
-      container.append(
-        createChip('⚡ Runtime Marquee'),
-        createChip(`Speed: ${dynamicSpeeds[dynamicSpeedIndex]}px/s`),
-        createChip('🔄 Smooth Animation'),
-        createChip('👆 Hover to Pause'),
-      );
-      return container;
-    };
-
-    function createChip(label) {
-      const span = document.createElement('span');
-      span.className = 'chip';
-      span.textContent = label;
-      return span;
-    }
-
-    const addBtn = document.querySelector('[data-action="add"]');
-    const speedBtn = document.querySelector('[data-action="speed"]');
-    const removeBtn = document.querySelector('[data-action="remove"]');
-
-    addBtn?.addEventListener('click', () => {
-      if (dynamicContainer) return;
-      dynamicContainer = buildDynamicMarquee();
-      dynamicZone?.append(dynamicContainer);
-      Marquee.rescan();
-      writeLog('✅ Added dynamic marquee with smooth animation');
-    });
-
-    speedBtn?.addEventListener('click', () => {
-      if (!dynamicContainer) return;
-      dynamicSpeedIndex = (dynamicSpeedIndex + 1) % dynamicSpeeds.length;
-      dynamicContainer.dataset.marqueeSpeed = String(dynamicSpeeds[dynamicSpeedIndex]);
-      writeLog(`⚡ Speed → ${dynamicContainer.dataset.marqueeSpeed}px/s (velocity-based)`);
-    });
-
-    removeBtn?.addEventListener('click', () => {
-      if (!dynamicContainer) return;
-      dynamicContainer.removeAttribute('data-marquee');
-      dynamicContainer.remove();
-      dynamicContainer = null;
-      writeLog('❌ Removed dynamic marquee');
-    });
-
-    const responsiveBox = document.querySelector('.responsive-box');
-    const resizeRange = document.querySelector('[data-action="resize-range"]');
-    const resizeResetBtn = document.querySelector('[data-action="resize-reset"]');
-    const defaultResponsiveWidth = 480;
-
-    resizeRange?.addEventListener('input', (event) => {
-      if (!responsiveBox) return;
-      const nextValue = Number.parseInt(event.target.value, 10);
-      responsiveBox.style.maxWidth = `${nextValue}px`;
-    });
-
-    resizeRange?.addEventListener('change', (event) => {
-      const nextValue = Number.parseInt(event.target.value, 10);
-      if (!Number.isFinite(nextValue)) return;
-      writeLog(`📏 Responsive width → ${nextValue}px (clones rebuilt)`);
-    });
-
-    resizeResetBtn?.addEventListener('click', () => {
-      if (!responsiveBox || !resizeRange) return;
-      responsiveBox.style.maxWidth = `${defaultResponsiveWidth}px`;
-      resizeRange.value = String(defaultResponsiveWidth);
-      writeLog('🔄 Responsive width reset');
-    });
-
-    const rescanGlobal = document.querySelector('[data-action="rescan-global"]');
-    const detachFirst = document.querySelector('[data-action="detach-first"]');
-    const attachFirst = document.querySelector('[data-action="attach-first"]');
-
-    rescanGlobal?.addEventListener('click', () => {
-      window.Marquee?.rescan();
-      writeLog('🔍 window.Marquee.rescan()');
-    });
-
-    detachFirst?.addEventListener('click', () => {
-      const first = document.querySelector('[data-marquee]');
-      if (!first) {
-        writeLog('❌ No marquee to detach');
-        return;
-      }
-      window.Marquee?.detach(first);
-      writeLog('⏸️ window.Marquee.detach(first)');
-    });
-
-    attachFirst?.addEventListener('click', () => {
-      const first = document.querySelector('[data-marquee]') ?? document.querySelector('.marquee-box');
-      if (!first) {
-        writeLog('❌ No marquee element found');
-        return;
-      }
-      window.Marquee?.attach(first);
-      writeLog('▶️ window.Marquee.attach(first)');
-    });
-  </script>
-</body>
-
+        <article class="panel">
+          <h3>C. Pause on hover</h3>
+          <p class="note">Click “Toggle Pause on Hover”.</p>
+          <div id="exampleC" class="marquee-box" data-marquee data-direction="right" data-speed="100">
+            <span><span class="tag">C</span> Hold ⌘ + K for Command Menu</span>
+            <span><span class="tag">C</span> Hold ⌘ + K for Command Menu</span>
+            <span><span class="tag">C</span> Hold ⌘ + K for Command Menu</span>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
 </html>
