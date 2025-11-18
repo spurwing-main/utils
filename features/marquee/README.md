@@ -36,7 +36,8 @@ Marquee.rescan();    // attach/detach based on current DOM
 
 Notes:
 - Content unit = element’s immediate children at first init; they are duplicated to ensure at least 2× container width.
-- For best a11y, keep marquee content non‑interactive and concise. Duplicated interactive controls can confuse screen readers.
+- **Non-Interactive**: Marquee content is strictly non-interactive (`pointer-events: none`). Links and buttons inside will not be clickable.
+- **Dynamic Content**: If you change the text or add/remove children *inside* the marquee, you must call `Marquee.rescan()` manually to update the layout. Attribute changes (`data-speed`, etc.) are detected automatically.
 - Reduced motion: users with `prefers-reduced-motion: reduce` see a static, non‑animated variant.
 
 ## API
