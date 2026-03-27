@@ -7,6 +7,7 @@ import { isVideo, getDocument } from "./internal-utils.js";
 
 import { attr, logError } from "./constants.js";
 
+// Supported delegated control tokens for data-video-action.
 const validActions = new Set(["play", "pause", "restart", "toggle", "mute:toggle"]);
 
 function warn(...args) {
