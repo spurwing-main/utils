@@ -7,6 +7,9 @@ import { isVideo, getDocument } from "./internal-utils.js";
 
 import { attr, logError } from "./constants.js";
 
+// Supported delegated control tokens for data-video-action.
+const validActions = new Set(["play", "pause", "restart", "toggle", "mute:toggle"]);
+
 function warn(...args) {
   logError("controls", args);
 }
@@ -17,10 +20,16 @@ export function onControlClick(event, Video, INSTANCES) {
   if (!target) return;
 
   const action = String(target.action || "").toLowerCase();
+  if (!validActions.has(action)) {
+    warn("[video] unsupported control action", { action });
+    return;
+  }
   for (const video of target.videos) {
     if (action === "play") Video.play(video);
     else if (action === "pause") Video.pause(video);
-    else Video.toggle(video);
+    else if (action === "restart") Video.restart(video);
+    else if (action === "mute:toggle") Video.mute(video);
+    else if (action === "toggle") Video.toggle(video);
   }
 
   event.preventDefault?.();

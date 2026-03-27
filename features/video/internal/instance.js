@@ -126,6 +126,9 @@ Instance.prototype._readConfig = function () {
     onPointer: restartTokens.includes("pointer-on"),
     onVisible: restartTokens.includes("scroll") || restartTokens.includes("visible"),
   };
+  const muteDefaultRaw = String(v.getAttribute(attr.muteDefault) || "muted").toLowerCase();
+  const isExplicitlyUnmuted = muteDefaultRaw === "unmuted";
+  const defaultMuted = !isExplicitlyUnmuted;
   const muted = v.hasAttribute(attr.muted);
 
   return {
@@ -150,6 +153,7 @@ Instance.prototype._readConfig = function () {
     pointerEnabled: envHasHover(),
     srcPrimary,
     srcMobile,
+    defaultMuted,
     // Muted lock: when true, the instance enforces muted=true and will not attempt unmuted autoplay
     muted,
   };
@@ -164,10 +168,7 @@ Instance.prototype._setup = function () {
     if (c.preload === "auto") v.preload = "metadata";
     else v.preload = c.preload;
   }
-  // Enforce muted when configured
-  if (c.muted) {
-    v.muted = true;
-  }
+  v.muted = c.muted ? true : c.defaultMuted;
 
   // Visibility observation (modern browsers only)
   const needsVis = c.load.onScroll || c.play.onVisible || c.pause.onHidden;
@@ -371,7 +372,7 @@ Instance.prototype._ensureLoaded = function (trigger) {
 Instance.prototype._requestPlay = function (trigger, priority = false) {
   const v = this.v;
   // If paused due to pointer-off, only a pointer-on should resume (rule 4)
-  const isPointerOn = trigger === "pointer-on";
+  const isUserGesture = trigger === "pointer-on" || trigger === "manual";
   // Allow manual override; block only auto visible resumes when paused by pointer-off
   if (this._pausedByPointerOff && trigger === "visible") {
     return;
@@ -395,7 +396,7 @@ Instance.prototype._requestPlay = function (trigger, priority = false) {
   const enforceMuted = !!this.cfg.muted;
   if (enforceMuted) {
     v.muted = true;
-  } else if (!isPointerOn) {
+  } else if (!isUserGesture) {
     // Non-gesture play needs muted
     v.muted = true;
   }
@@ -412,7 +413,7 @@ Instance.prototype._requestPlay = function (trigger, priority = false) {
       })
       .catch(() => {
         // Autoplay policy: retry muted for pointer-on
-        if (!enforceMuted && isPointerOn && !v.muted) {
+        if (!enforceMuted && isUserGesture && !v.muted) {
           v.muted = true;
           const retryPromise = v.play();
           if (retryPromise && typeof retryPromise.then === "function") {
@@ -430,7 +431,7 @@ Instance.prototype._requestPlay = function (trigger, priority = false) {
   if (priority) {
     this._lastPriorityPlayAt = Date.now();
   }
-  if (isPointerOn || trigger === "manual") this._pausedByPointerOff = false;
+  if (isUserGesture) this._pausedByPointerOff = false;
 };
 
 Instance.prototype._requestPause = function (trigger) {

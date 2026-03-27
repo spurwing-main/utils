@@ -300,7 +300,8 @@
             <h3>D1: manual only</h3>
             <p>
               <strong>Pattern:</strong> No load/play/pause triggers; use delegated controls.<br>
-              <code>data-video-src</code> only. Controls below use <code>data-video-action</code> and <code>data-video-target</code>.
+              <code>data-video-src</code> only. Videos start muted by default; use <code>data-video-mute-default="unmuted"</code> to opt out.<br>
+              Controls below use <code>data-video-action</code> and <code>data-video-target</code>.
             </p>
           </header>
           <div class="media">
@@ -312,6 +313,8 @@
             <button data-video-action="play" data-video-target=".manual-demo" role="button" tabindex="0"><span>Play</span></button>
             <button data-video-action="pause" data-video-target=".manual-demo" role="button" tabindex="0">Pause</button>
             <button data-video-action="toggle" data-video-target=".manual-demo" role="button" tabindex="0">Toggle</button>
+            <button data-video-action="restart" data-video-target=".manual-demo" role="button" tabindex="0">Restart</button>
+            <button data-video-action="mute:toggle" data-video-target=".manual-demo" role="button" tabindex="0">Toggle mute</button>
           </div>
         </article>
 
