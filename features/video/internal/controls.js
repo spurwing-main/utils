@@ -29,7 +29,7 @@ export function onControlClick(event, Video, INSTANCES) {
     else if (action === "pause") Video.pause(video);
     else if (action === "restart") Video.restart(video);
     else if (action === "mute:toggle") Video.mute(video);
-    else if (action === "toggle") Video.toggle(video);
+    else Video.toggle(video);
   }
 
   event.preventDefault?.();
