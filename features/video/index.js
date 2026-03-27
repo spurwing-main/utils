@@ -143,6 +143,6 @@ Manual verification:
 6. ERROR: Invalid URLs emit `video:error`; alternates retry once.
 7. PRIORITY: pointer-on during hidden should override pause briefly.
 8. PRELOAD: auto → metadata until first play, then auto.
-9. MUTE: videos default to muted, data-video-mute toggles on/off, and data-video-mute-default can opt out.
+9. MUTE: videos default to muted, data-video-action="mute:toggle" toggles on/off, and data-video-mute-default can opt out.
 10. CLEANUP: No lingering listeners after detach/remove.
 */

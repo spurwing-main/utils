@@ -7,6 +7,8 @@ import { isVideo, getDocument } from "./internal-utils.js";
 
 import { attr, logError } from "./constants.js";
 
+const validActions = new Set(["play", "pause", "restart", "toggle", "mute:toggle"]);
+
 function warn(...args) {
   logError("controls", args);
 }
@@ -17,13 +19,7 @@ export function onControlClick(event, Video, INSTANCES) {
   if (!target) return;
 
   const action = String(target.action || "").toLowerCase();
-  if (
-    action !== "play" &&
-    action !== "pause" &&
-    action !== "restart" &&
-    action !== "toggle" &&
-    action !== "mute:toggle"
-  ) {
+  if (!validActions.has(action)) {
     warn("[video] unsupported control action", { action });
     return;
   }
