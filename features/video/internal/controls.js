@@ -16,19 +16,22 @@ export function onControlClick(event, Video, INSTANCES) {
   const target = findActionFromEvent(event, INSTANCES);
   if (!target) return;
 
-  const mute = String(target.mute || "").toLowerCase();
   const action = String(target.action || "").toLowerCase();
   const isValidAction =
-    mute === "toggle" || action === "play" || action === "pause" || action === "restart" || action === "toggle";
+    action === "play" ||
+    action === "pause" ||
+    action === "restart" ||
+    action === "toggle" ||
+    action === "mute:toggle";
   if (!isValidAction) {
-    warn("[video] unsupported control action", { action, mute });
+    warn("[video] unsupported control action", { action });
     return;
   }
   for (const video of target.videos) {
-    if (mute === "toggle") Video.mute(video);
-    else if (action === "play") Video.play(video);
+    if (action === "play") Video.play(video);
     else if (action === "pause") Video.pause(video);
     else if (action === "restart") Video.restart(video);
+    else if (action === "mute:toggle") Video.mute(video);
     else if (action === "toggle") Video.toggle(video);
   }
 
@@ -47,15 +50,12 @@ function findActionTarget(startElement, INSTANCES) {
   let element = startElement;
 
   while (element && element !== doc?.documentElement) {
-    const hasAction = element?.hasAttribute?.(attr.action);
-    const hasMute = element?.hasAttribute?.(attr.mute);
-    if (!hasAction && !hasMute) {
+    if (!element?.hasAttribute?.(attr.action)) {
       element = element.parentElement;
       continue;
     }
 
-    const action = hasAction ? element.getAttribute(attr.action) : null;
-    const mute = hasMute ? element.getAttribute(attr.mute) : null;
+    const action = element.getAttribute(attr.action);
     const selector = element.getAttribute(attr.target);
 
     // Try selector first
@@ -64,7 +64,7 @@ function findActionTarget(startElement, INSTANCES) {
         const videos = Array.from(doc.querySelectorAll(selector)).filter(
           (node) => isVideo(node) && INSTANCES.has(node),
         );
-        if (videos.length) return { action, mute, videos };
+        if (videos.length) return { action, videos };
       } catch (e) {
         warn("[video] invalid selector in data-video-target:", selector, e);
         return null;
@@ -75,14 +75,14 @@ function findActionTarget(startElement, INSTANCES) {
     let parent = element;
     while (parent && parent !== doc.documentElement) {
       if (isVideo(parent) && INSTANCES.has(parent)) {
-        return { action, mute, videos: [parent] };
+        return { action, videos: [parent] };
       }
 
       const videos = parent.querySelectorAll?.("video");
       if (videos?.length) {
         for (const video of videos) {
           if (INSTANCES.has(video)) {
-            return { action, mute, videos: [video] };
+            return { action, videos: [video] };
           }
         }
       }

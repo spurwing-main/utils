@@ -5,7 +5,7 @@ Attribute‑driven, lazy‑loading `<video>` with delegated controls and a small
 - Declarative HTML via `data-video-*` attributes
 - Auto‑attach on page load and on DOM additions (MutationObserver)
 - Scroll visibility and pointer (hover) triggers
-- Delegated controls with `data-video-action`, `data-video-mute`, and `data-video-target`
+- Delegated controls with `data-video-action` and `data-video-target`
 - Small API (`Video.*`) for manual control when needed
 - Namespaced custom events (`video:*`) for UI hooks
 
@@ -96,8 +96,7 @@ Notes:
 
 Add controls anywhere in the DOM; the feature listens at the document level.
 
-- `data-video-action`: `play | pause | toggle | restart`
-- `data-video-mute`: `toggle`
+- `data-video-action`: `play | pause | toggle | restart | mute:toggle`
 - `data-video-target` (optional): CSS selector for the target video(s). If omitted, the nearest or descendant managed `<video>` is used.
 
 Accessibility:
@@ -110,7 +109,7 @@ Examples:
 <button data-video-action="play" data-video-target="#v1">Play</button>
 <button data-video-action="pause" data-video-target="#v1">Pause</button>
 <button data-video-action="restart" data-video-target="#v1">Restart</button>
-<button data-video-mute="toggle" data-video-target="#v1">Toggle mute</button>
+<button data-video-action="mute:toggle" data-video-target="#v1">Toggle mute</button>
 
 <!-- Nearest/descendant fallback (no target) -->
 <div class="card">
@@ -231,7 +230,7 @@ init(); // sets up auto-attach, mutation observer, and delegated controls
 <button data-video-action="play" data-video-target="#promo">Play</button>
 <button data-video-action="pause" data-video-target="#promo">Pause</button>
 <button data-video-action="restart" data-video-target="#promo">Restart</button>
-<button data-video-mute="toggle" data-video-target="#promo">Toggle mute</button>
+<button data-video-action="mute:toggle" data-video-target="#promo">Toggle mute</button>
 <video id="promo" data-video-src="/promo.mp4" data-video-mute-default="unmuted"></video>
 ```
 

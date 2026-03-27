@@ -9,7 +9,6 @@ export const attr = {
   srcMob: "data-video-mob-src",
   preload: "data-video-preload",
   restartWhen: "data-video-restart-when",
-  mute: "data-video-mute",
   muteDefault: "data-video-mute-default",
   loadWhen: "data-video-load-when",
   playWhen: "data-video-play-when",
