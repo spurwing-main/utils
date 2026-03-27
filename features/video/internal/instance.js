@@ -127,7 +127,7 @@ Instance.prototype._readConfig = function () {
     onVisible: restartTokens.includes("scroll") || restartTokens.includes("visible"),
   };
   const muteDefaultRaw = String(v.getAttribute(attr.muteDefault) || "muted").toLowerCase();
-  const defaultMuted = !["false", "off", "unmuted"].includes(muteDefaultRaw);
+  const defaultMuted = muteDefaultRaw !== "unmuted";
   const muted = v.hasAttribute(attr.muted);
 
   return {
