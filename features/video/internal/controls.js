@@ -20,6 +20,8 @@ export function onControlClick(event, Video, INSTANCES) {
   for (const video of target.videos) {
     if (action === "play") Video.play(video);
     else if (action === "pause") Video.pause(video);
+    else if (action === "restart") Video.restart(video);
+    else if (action === "mute") Video.mute(video);
     else Video.toggle(video);
   }
 

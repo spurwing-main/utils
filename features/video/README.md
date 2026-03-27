@@ -20,7 +20,7 @@ Include the loader and enable the `video` feature:
 ```html
 <!-- CDN example (pin a version in production) -->
 <script type="module"
-  src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.25/loader.js"
+  src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.34/loader.js"
   data-features="video"
   data-debug="video"><!-- remove data-debug in prod --></script>
 ```
@@ -95,7 +95,7 @@ Notes:
 
 Add controls anywhere in the DOM; the feature listens at the document level.
 
-- `data-video-action`: `play | pause | toggle`
+- `data-video-action`: `play | pause | toggle | restart | mute`
 - `data-video-target` (optional): CSS selector for the target video(s). If omitted, the nearest or descendant managed `<video>` is used.
 
 Accessibility:
@@ -107,6 +107,8 @@ Examples:
 <!-- Target by selector -->
 <button data-video-action="play" data-video-target="#v1">Play</button>
 <button data-video-action="pause" data-video-target="#v1">Pause</button>
+<button data-video-action="restart" data-video-target="#v1">Restart</button>
+<button data-video-action="mute" data-video-target="#v1">Mute</button>
 
 <!-- Nearest/descendant fallback (no target) -->
 <div class="card">
@@ -160,8 +162,8 @@ Import from `@tim-spw/utils/video` or use it from modules loaded by the loader.
   - Re‑applies the chosen `src` and calls `load()` again.
 - `Video.ensureLoaded(el: HTMLVideoElement)`
   - If not yet loaded, select URL (mobile vs primary), set `src`, and call `load()`. Emits `video:error` with `missing-src` when no URL is available.
-- `Video.play(el)`, `Video.pause(el)`, `Video.toggle(el)`
-  - Manual transport controls. `play()` sets `playsinline` and handles autoplay policy with muted fallback as described below.
+- `Video.play(el)`, `Video.pause(el)`, `Video.toggle(el)`, `Video.restart(el)`, `Video.mute(el)`
+  - Manual transport controls. `play()` sets `playsinline` and handles autoplay policy with muted fallback as described below. `restart()` seeks to the beginning and plays. `mute()` sets `video.muted = true`.
 - `Video.attachAll(root?: ParentNode) => Instance[]`
   - Attach all matching `<video data-video-src>` elements inside `root` (or the document).
 
@@ -226,6 +228,8 @@ init(); // sets up auto-attach, mutation observer, and delegated controls
 ```html
 <button data-video-action="play" data-video-target="#promo">Play</button>
 <button data-video-action="pause" data-video-target="#promo">Pause</button>
+<button data-video-action="restart" data-video-target="#promo">Restart</button>
+<button data-video-action="mute" data-video-target="#promo">Mute</button>
 <video id="promo" data-video-src="/promo.mp4"></video>
 ```
 

@@ -69,6 +69,17 @@ export const Video = {
     const inst = INSTANCES.get(el);
     if (inst) inst._requestPause("manual");
   },
+  restart(el) {
+    const inst = INSTANCES.get(el);
+    if (!inst) return;
+    inst.v.currentTime = 0;
+    inst._requestPlay("manual");
+  },
+  mute(el) {
+    const inst = INSTANCES.get(el);
+    if (!inst) return;
+    inst.v.muted = true;
+  },
   toggle(el) {
     const inst = INSTANCES.get(el);
     if (!inst) return;
