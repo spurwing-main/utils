@@ -17,13 +17,13 @@ export function onControlClick(event, Video, INSTANCES) {
   if (!target) return;
 
   const action = String(target.action || "").toLowerCase();
-  const isValidAction =
-    action === "play" ||
-    action === "pause" ||
-    action === "restart" ||
-    action === "toggle" ||
-    action === "mute:toggle";
-  if (!isValidAction) {
+  if (
+    action !== "play" &&
+    action !== "pause" &&
+    action !== "restart" &&
+    action !== "toggle" &&
+    action !== "mute:toggle"
+  ) {
     warn("[video] unsupported control action", { action });
     return;
   }
