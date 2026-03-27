@@ -27,7 +27,7 @@ Version-pinned (recommended):
 
 ```html
 <script type="module"
-src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.37/loader.js"
+src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.33/loader.js"
 data-features="video"
 data-debug="loader">
 </script>
@@ -40,13 +40,13 @@ Latest tag (auto-updating; not recommended for production stability):
   data-features="video"></script>
 ```
 
-Update the `@0.1.36` segment when publishing a new release; the exported `VERSION` constant mirrors [`package.json`](package.json).
+Update the `@0.1.33` segment when publishing a new release; the exported `VERSION` constant mirrors [`package.json`](package.json).
 
 ## Publishing (CI)
 
 Lean flow: just push to `main`.
 
-- The autobump action bumps the patch version, syncs versioned constants and pinned CDN links, commits "Release vX.Y.Z [ci release]", pushes, and publishes to npm.
+- The autobump action bumps the patch version, syncs versioned constants and pinned CDN links, publishes to npm, then commits and pushes "Release vX.Y.Z [ci release]".
 - Requirements: set `NPM_TOKEN` repo secret with publish permission.
 
 ## Debugging

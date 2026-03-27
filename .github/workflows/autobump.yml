@@ -73,19 +73,18 @@ jobs:
           console.log('Synced version', v);
           NODE
 
-      - name: Commit version bump
-        continue-on-error: true
-        run: |
-          V=$(node -p "require('./package.json').version")
-          git add -A
-          git commit -m "Release v$V [ci release]"
-          git push
-
       - name: Skip publish (missing token)
         if: ${{ env.NODE_AUTH_TOKEN == '' }}
         run: echo "NPM_TOKEN not set; skipping publish."
 
       - name: Publish to npm
         if: ${{ env.NODE_AUTH_TOKEN != '' }}
-        continue-on-error: true
         run: npm publish --access public
+
+      - name: Commit version bump
+        if: ${{ env.NODE_AUTH_TOKEN != '' }}
+        run: |
+          V=$(node -p "require('./package.json').version")
+          git add -A
+          git commit -m "Release v$V [ci release]"
+          git push
