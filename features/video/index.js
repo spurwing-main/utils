@@ -78,7 +78,7 @@ export const Video = {
   mute(el) {
     const inst = INSTANCES.get(el);
     if (!inst) return;
-    inst.v.muted = true;
+    inst.v.muted = !inst.v.muted;
   },
   toggle(el) {
     const inst = INSTANCES.get(el);
