@@ -27,7 +27,7 @@ Version-pinned (recommended):
 
 ```html
 <script type="module"
-src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.36/loader.js"
+src="https://cdn.jsdelivr.net/npm/@tim-spw/utils@0.1.37/loader.js"
 data-features="video"
 data-debug="loader">
 </script>
