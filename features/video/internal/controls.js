@@ -16,9 +16,11 @@ export function onControlClick(event, Video, INSTANCES) {
   const target = findActionFromEvent(event, INSTANCES);
   if (!target) return;
 
+  const mute = String(target.mute || "").toLowerCase();
   const action = String(target.action || "").toLowerCase();
   for (const video of target.videos) {
-    if (action === "play") Video.play(video);
+    if (mute === "toggle") Video.mute(video);
+    else if (action === "play") Video.play(video);
     else if (action === "pause") Video.pause(video);
     else if (action === "restart") Video.restart(video);
     else if (action === "mute") Video.mute(video);
@@ -40,12 +42,15 @@ function findActionTarget(startElement, INSTANCES) {
   let element = startElement;
 
   while (element && element !== doc?.documentElement) {
-    if (!element?.hasAttribute?.(attr.action)) {
+    const hasAction = element?.hasAttribute?.(attr.action);
+    const hasMute = element?.hasAttribute?.(attr.mute);
+    if (!hasAction && !hasMute) {
       element = element.parentElement;
       continue;
     }
 
-    const action = element.getAttribute(attr.action);
+    const action = hasAction ? element.getAttribute(attr.action) : null;
+    const mute = hasMute ? element.getAttribute(attr.mute) : null;
     const selector = element.getAttribute(attr.target);
 
     // Try selector first
@@ -54,7 +59,7 @@ function findActionTarget(startElement, INSTANCES) {
         const videos = Array.from(doc.querySelectorAll(selector)).filter(
           (node) => isVideo(node) && INSTANCES.has(node),
         );
-        if (videos.length) return { action, videos };
+        if (videos.length) return { action, mute, videos };
       } catch (e) {
         warn("[video] invalid selector in data-video-target:", selector, e);
         return null;
@@ -65,14 +70,14 @@ function findActionTarget(startElement, INSTANCES) {
     let parent = element;
     while (parent && parent !== doc.documentElement) {
       if (isVideo(parent) && INSTANCES.has(parent)) {
-        return { action, videos: [parent] };
+        return { action, mute, videos: [parent] };
       }
 
       const videos = parent.querySelectorAll?.("video");
       if (videos?.length) {
         for (const video of videos) {
           if (INSTANCES.has(video)) {
-            return { action, videos: [video] };
+            return { action, mute, videos: [video] };
           }
         }
       }

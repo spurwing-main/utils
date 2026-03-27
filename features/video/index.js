@@ -139,10 +139,10 @@ Manual verification:
 2. LOAD: Pointer-on should trigger load (data attrs removed) and play; check events.
 3. VISIBILITY: Scroll into view → play; scroll out → pause (IntersectionObserver).
 4. DETACH: Remove from DOM → subsequent interactions no longer emit events.
-5. CONTROLS: data-video-action buttons work via delegation.
+5. CONTROLS: data-video-action and data-video-mute buttons work via delegation.
 6. ERROR: Invalid URLs emit `video:error`; alternates retry once.
 7. PRIORITY: pointer-on during hidden should override pause briefly.
 8. PRELOAD: auto → metadata until first play, then auto.
-9. MUTE: non-gesture plays force muted; pointer gestures try unmuted first.
+9. MUTE: videos default to muted, data-video-mute toggles on/off, and data-video-mute-default can opt out.
 10. CLEANUP: No lingering listeners after detach/remove.
 */

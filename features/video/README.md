@@ -5,7 +5,7 @@ Attribute‑driven, lazy‑loading `<video>` with delegated controls and a small
 - Declarative HTML via `data-video-*` attributes
 - Auto‑attach on page load and on DOM additions (MutationObserver)
 - Scroll visibility and pointer (hover) triggers
-- Delegated controls with `data-video-action`/`data-video-target`
+- Delegated controls with `data-video-action`, `data-video-mute`, and `data-video-target`
 - Small API (`Video.*`) for manual control when needed
 - Namespaced custom events (`video:*`) for UI hooks
 
@@ -82,6 +82,7 @@ Use these attributes on `<video>` to control when it loads/plays/pauses and how 
 - `data-video-restart-when` (optional): Space‑separated tokens that control when playback should restart from the beginning (`currentTime = 0`) and immediately play again.
   - Tokens: `finished` (restart on `ended`), `pointer-on` (restart whenever pointer enters scope), `scroll` (alias of `visible`; restart when becoming visible via IntersectionObserver).
   - Combinations: tokens can be combined. Example: `finished pointer-on` loops while the pointer is over the element and, if you leave and re‑enter, it starts from the beginning again.
+- `data-video-mute-default` (optional): Initial mute state for the managed video. Values: `muted` (default) or `unmuted`.
 - `data-video-muted` (optional, presence‑based): Enforce muted at all times. Disables the “try unmuted once then retry muted” behavior for pointer plays.
 
 Notes:
@@ -95,7 +96,8 @@ Notes:
 
 Add controls anywhere in the DOM; the feature listens at the document level.
 
-- `data-video-action`: `play | pause | toggle | restart | mute`
+- `data-video-action`: `play | pause | toggle | restart`
+- `data-video-mute`: `toggle`
 - `data-video-target` (optional): CSS selector for the target video(s). If omitted, the nearest or descendant managed `<video>` is used.
 
 Accessibility:
@@ -108,7 +110,7 @@ Examples:
 <button data-video-action="play" data-video-target="#v1">Play</button>
 <button data-video-action="pause" data-video-target="#v1">Pause</button>
 <button data-video-action="restart" data-video-target="#v1">Restart</button>
-<button data-video-action="mute" data-video-target="#v1">Toggle mute</button>
+<button data-video-mute="toggle" data-video-target="#v1">Toggle mute</button>
 
 <!-- Nearest/descendant fallback (no target) -->
 <div class="card">
@@ -180,7 +182,7 @@ init(); // sets up auto-attach, mutation observer, and delegated controls
 
 - Source selection: Chooses `data-video-mob-src` when `matchMedia('(max-width: 812px)')` matches; otherwise `data-video-src`. On media error, retries the alternate once if available.
 - Native `src` ignored: When managed, any existing `src`/`currentSrc` is cleared to avoid loading before triggers.
-- Autoplay policy: For non‑gesture plays (e.g., visibility), the video is forced muted. For pointer plays, it tries unmuted once; on rejection, it retries muted. With `data-video-muted`, it always stays muted and does not attempt unmuted.
+- Autoplay policy: For non‑gesture plays (e.g., visibility), the video is forced muted. Pointer and manual controls are treated as gesture-driven plays and can stay unmuted. On rejection, playback retries muted. With `data-video-muted`, it always stays muted and does not attempt unmuted.
 - `playsinline`: Added automatically on play to avoid full‑screen takeover on mobile.
 - Visibility rules: `visible`/`hidden` use IntersectionObserver with your configured `threshold` and `rootMargin`.
   - Pause wins over play in the same frame unless a high‑priority pointer‑on occurred in the last ~120ms.
@@ -229,8 +231,8 @@ init(); // sets up auto-attach, mutation observer, and delegated controls
 <button data-video-action="play" data-video-target="#promo">Play</button>
 <button data-video-action="pause" data-video-target="#promo">Pause</button>
 <button data-video-action="restart" data-video-target="#promo">Restart</button>
-<button data-video-action="mute" data-video-target="#promo">Toggle mute</button>
-<video id="promo" data-video-src="/promo.mp4"></video>
+<button data-video-mute="toggle" data-video-target="#promo">Toggle mute</button>
+<video id="promo" data-video-src="/promo.mp4" data-video-mute-default="unmuted"></video>
 ```
 
 ---
