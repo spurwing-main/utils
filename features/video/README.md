@@ -231,6 +231,7 @@ init(); // sets up auto-attach, mutation observer, and delegated controls
 <button data-video-action="pause" data-video-target="#promo">Pause</button>
 <button data-video-action="restart" data-video-target="#promo">Restart</button>
 <button data-video-action="mute:toggle" data-video-target="#promo">Toggle mute</button>
+<!-- Start unmuted instead of default muted -->
 <video id="promo" data-video-src="/promo.mp4" data-video-mute-default="unmuted"></video>
 ```
 

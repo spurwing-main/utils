@@ -127,7 +127,8 @@ Instance.prototype._readConfig = function () {
     onVisible: restartTokens.includes("scroll") || restartTokens.includes("visible"),
   };
   const muteDefaultRaw = String(v.getAttribute(attr.muteDefault) || "muted").toLowerCase();
-  const defaultMuted = muteDefaultRaw === "unmuted" ? false : true;
+  const isExplicitlyUnmuted = muteDefaultRaw === "unmuted";
+  const defaultMuted = !isExplicitlyUnmuted;
   const muted = v.hasAttribute(attr.muted);
 
   return {
@@ -167,7 +168,7 @@ Instance.prototype._setup = function () {
     if (c.preload === "auto") v.preload = "metadata";
     else v.preload = c.preload;
   }
-  v.muted = c.muted || c.defaultMuted;
+  v.muted = c.muted ? true : c.defaultMuted;
 
   // Visibility observation (modern browsers only)
   const needsVis = c.load.onScroll || c.play.onVisible || c.pause.onHidden;
