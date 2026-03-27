@@ -136,6 +136,10 @@ Listen on the `<video>` element for namespaced events. All events are non‑bubb
   - detail: `{ trigger: 'hidden' | 'pointer-off' | 'manual' }`
 - `video:error`: Emitted for configuration or media errors.
   - detail: `{ trigger: 'manual', reason: 'missing-src' | 'invalid-url' | 'media-error' | 'no-alternate', url: string | null }`
+- `video:muted`: Emitted when the video is muted via `Video.mute()` / `mute:toggle` action.
+  - detail: `{ trigger: 'manual' }`
+- `video:unmuted`: Emitted when the video is unmuted via `Video.mute()` / `mute:toggle` action.
+  - detail: `{ trigger: 'manual' }`
 
 Example hook:
 

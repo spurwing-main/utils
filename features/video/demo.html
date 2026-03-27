@@ -101,6 +101,13 @@
           setBadge(badge, 'state-error', 'error');
           console.warn('video:error', e.detail);
         });
+        video.addEventListener('video:muted', () => {
+          setBadge(badge, 'state-paused', 'muted');
+        });
+        video.addEventListener('video:unmuted', () => {
+          if (!video.paused) setBadge(badge, 'state-playing', 'playing');
+          else setBadge(badge, 'state-paused', 'unmuted');
+        });
       }
 
       document.addEventListener('DOMContentLoaded', () => {
