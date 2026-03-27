@@ -443,6 +443,13 @@ Instance.prototype._requestPause = function (trigger) {
   log("[video] paused", trigger);
 };
 
+Instance.prototype.toggleMute = function () {
+  const v = this.v;
+  v.muted = !v.muted;
+  emit(v, v.muted ? "video:muted" : "video:unmuted", { trigger: "manual" });
+  log("[video]", v.muted ? "muted" : "unmuted");
+};
+
 Instance.prototype._onIntersect = function (entries) {
   const v = this.v;
   const c = this.cfg;
