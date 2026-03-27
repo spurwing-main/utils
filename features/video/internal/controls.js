@@ -18,6 +18,12 @@ export function onControlClick(event, Video, INSTANCES) {
 
   const mute = String(target.mute || "").toLowerCase();
   const action = String(target.action || "").toLowerCase();
+  const isValidAction =
+    mute === "toggle" || action === "play" || action === "pause" || action === "restart" || action === "toggle";
+  if (!isValidAction) {
+    warn("[video] unsupported control action", { action, mute });
+    return;
+  }
   for (const video of target.videos) {
     if (mute === "toggle") Video.mute(video);
     else if (action === "play") Video.play(video);
