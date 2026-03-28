@@ -4,6 +4,7 @@
 const DBG = typeof window !== "undefined" ? window.__UTILS_DEBUG__?.createLogger?.("marquee") : null;
 
 const MAX_UNITS = 1000;
+const UNIT_EPSILON = 0.5;
 const REG = new Map(); // element -> instance
 const PENDING = new Set();
 let RAF_ID = 0;
@@ -45,10 +46,13 @@ function ensureCSS() {
   const existing = d.getElementById("marquee-css");
   const css = `
         [data-marquee]{
-          display:flex;
+          display:block;
           overflow:hidden;
-          contain:layout paint style;
-          content-visibility:auto;
+          inline-size:100%;
+          max-inline-size:100%;
+          min-inline-size:0;
+          box-sizing:border-box;
+          contain:inline-size paint style;
           contain-intrinsic-size:0 40px; /* tune the 40px to your typical height */
         }
         @supports (contain-intrinsic-size:auto 40px){
@@ -56,8 +60,12 @@ function ensureCSS() {
         }
         [data-marquee] .marquee-inner{
           display:flex;
+          flex-wrap:nowrap;
           gap:inherit;
           width:max-content;
+          min-width:max-content;
+          transform:translate3d(0,0,0);
+          backface-visibility:hidden;
           will-change:transform;
           animation-name:marquee-scroll;
           animation-timing-function:linear;
@@ -146,12 +154,29 @@ function ensureMO() {
     MO = new MutationObserver((mutations) => {
       for (const m of mutations) {
         if (m.type === "attributes") {
+          if (m.attributeName === "data-marquee") {
+            rescan();
+            continue;
+          }
           if (REG.has(m.target)) {
             const inst = REG.get(m.target);
             const next = readSettings(m.target);
             inst.applySettings(next);
           }
           continue;
+        }
+        const target =
+          m.target?.nodeType === 1
+            ? m.target
+            : m.target?.parentElement || null;
+        const host = target?.closest?.("[data-marquee]") || null;
+        const inst = host ? REG.get(host) : null;
+        if (inst && !inst._writingDOM) {
+          const hiddenAncestor = target?.closest?.("[aria-hidden='true'], [inert]");
+          if (!hiddenAncestor) {
+            inst.refreshContent();
+            inst.scheduleUpdate(true);
+          }
         }
         for (const node of m.removedNodes) {
           if (node.nodeType !== 1) continue;
@@ -172,7 +197,13 @@ function ensureMO() {
         }
       }
     });
-    MO.observe(d.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-speed", "data-direction", "data-pause-on-hover"] });
+    MO.observe(d.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["data-marquee", "data-speed", "data-direction", "data-pause-on-hover"],
+    });
   }
 }
 
@@ -186,6 +217,17 @@ function readSettings(el) {
   };
 }
 
+function readTranslateX(transform) {
+  if (!transform || transform === "none") return 0;
+
+  const match = transform.match(/matrix(3d)?\(([^)]+)\)/);
+  if (!match) return 0;
+
+  const values = match[2].split(",").map((value) => Number.parseFloat(value.trim()));
+  if (match[1] === "3d") return Number.isFinite(values[12]) ? values[12] : 0;
+  return Number.isFinite(values[4]) ? values[4] : 0;
+}
+
 class Instance {
   constructor(el) {
     this.el = el;
@@ -195,7 +237,8 @@ class Instance {
     this._unitWidth = 0;
     this._visible = false;
     this._rafQueued = false;
-    this._last = { total: 0, unit: 0, dir: this.settings.direction };
+    this._writingDOM = false;
+    this._last = { unit: 0, dir: this.settings.direction, speed: this.settings.speed };
 
     this._ensureStructure();
     this._attach();
@@ -221,6 +264,35 @@ class Instance {
       this.el.setAttribute("data-running", "false");
     }
     this._unitWidth = 0; // lazy
+  }
+
+  _suppressInternalMutations() {
+    if (this._writingDOM) return;
+    this._writingDOM = true;
+    queueMicrotask(() => {
+      this._writingDOM = false;
+    });
+  }
+
+  refreshContent() {
+    const d = getDocument();
+    if (!d || !this.inner) return;
+
+    const currentChildren = Array.from(this.inner.children);
+    const originals = currentChildren.filter(
+      (node) => !node.hasAttribute("aria-hidden") && !node.hasAttribute("inert"),
+    );
+    const source = originals.length > 0 ? originals : currentChildren.slice(0, this._unitTemplate?.length || currentChildren.length);
+
+    const frag = d.createDocumentFragment();
+    source.forEach((node) => frag.appendChild(node));
+    this._suppressInternalMutations();
+    this.inner.replaceChildren(frag);
+
+    this._unitTemplate = Array.from(this.inner.children).map((node) => node.cloneNode(true));
+    this._unitWidth = 0;
+    this._last = { unit: 0, dir: this.settings.direction, speed: this.settings.speed };
+    this._markClonesA11y();
   }
 
   _measureUnitWidth() {
@@ -250,21 +322,24 @@ class Instance {
     probe.style.cssText =
       "display:flex;gap:inherit;width:max-content;position:absolute;visibility:hidden;pointer-events:none;contain:layout paint style;";
     const frag = d.createDocumentFragment();
-    this._unitTemplate.forEach((n) => frag.appendChild(n.cloneNode(true)));
+    const groupA = this._unitTemplate.map((n) => n.cloneNode(true));
+    const groupB = this._unitTemplate.map((n) => n.cloneNode(true));
+    groupA.forEach((n) => frag.appendChild(n));
+    groupB.forEach((n) => frag.appendChild(n));
     probe.appendChild(frag);
     this.el.appendChild(probe);
-    const w1 = probe.scrollWidth;
 
-    // Add a second set to measure the stride (width + gap)
-    const frag2 = d.createDocumentFragment();
-    this._unitTemplate.forEach((n) => frag2.appendChild(n.cloneNode(true)));
-    probe.appendChild(frag2);
-    const w2 = probe.scrollWidth;
+    const first = groupA[0];
+    const second = groupB[0];
+    const rect1 = first?.getBoundingClientRect();
+    const rect2 = second?.getBoundingClientRect();
 
     this.el.removeChild(probe);
 
-    // The stride is the difference (width of group + gap)
-    const stride = Math.max(1, w2 - w1);
+    const stride =
+      rect1 && rect2
+        ? Math.max(1, Math.abs(rect2.left - rect1.left))
+        : Math.max(1, probe.scrollWidth / 2);
     this._unitWidth = stride;
     return this._unitWidth;
   }
@@ -308,9 +383,11 @@ class Instance {
         const templateIndex = (currentNodes + i) % templateLen;
         frag.appendChild(this._unitTemplate[templateIndex].cloneNode(true));
       }
+      this._suppressInternalMutations();
       this.inner.appendChild(frag);
     } else if (targetNodes < currentNodes) {
       let toRemove = currentNodes - targetNodes;
+      this._suppressInternalMutations();
       while (toRemove > 0 && this.inner.lastChild) {
         this.inner.removeChild(this.inner.lastChild);
         toRemove--;
@@ -340,14 +417,35 @@ class Instance {
   }
 
   _setAnimation(unit) {
-    const distance = Math.max(0, Math.floor(unit));
+    const computed =
+      typeof window !== "undefined" && this.inner
+        ? window.getComputedStyle(this.inner)
+        : null;
+    const prevTransform = readTranslateX(computed?.transform);
+
+    const distance = Math.max(0, unit);
     const from = this.settings.direction === "left" ? 0 : -distance;
     const to = this.settings.direction === "left" ? -distance : 0;
-    this.inner.style.setProperty("--from", from + "px");
-    this.inner.style.setProperty("--to", to + "px");
+
+    this.inner.style.animationName = "none";
+    void this.inner.offsetWidth;
+    this.inner.style.setProperty("--from", `${distance === 0 ? 0 : from.toFixed(3)}px`);
+    this.inner.style.setProperty("--to", `${distance === 0 ? 0 : to.toFixed(3)}px`);
     const pxPerSec = Math.max(1, this.settings.speed);
     const dur = Math.min(600_000, Math.max(16, (distance / pxPerSec) * 1000)); // 16ms–10m
     this.inner.style.animationDuration = `${dur}ms`;
+
+    const nextRange = to - from;
+    if (nextRange !== 0 && Number.isFinite(prevTransform)) {
+      const rawProgress = (prevTransform - from) / nextRange;
+      const progress = Math.max(0, Math.min(1, rawProgress));
+      this.inner.style.animationDelay = `${(-progress * dur).toFixed(3)}ms`;
+      this.inner.style.animationName = "marquee-scroll";
+      return;
+    }
+
+    this.inner.style.animationDelay = "0ms";
+    this.inner.style.animationName = "marquee-scroll";
   }
 
   _update(force = false) {
@@ -355,22 +453,24 @@ class Instance {
     if (this.el.clientWidth <= 0 || !this._visible) return;
     if (force) this._unitWidth = 0;
 
-    const { total, unit } = this._fill();
+    const { unit } = this._fill();
     const needAnimUpdate =
-      force ||
-      total !== this._last.total ||
-      unit !== this._last.unit ||
-      this.settings.direction !== this._last.dir;
+      Math.abs(unit - this._last.unit) > UNIT_EPSILON ||
+      this.settings.direction !== this._last.dir ||
+      this.settings.speed !== this._last.speed;
 
     if (needAnimUpdate) {
       this._setAnimation(unit);
     }
 
-    this._last = { total, unit, dir: this.settings.direction };
+    this._last = { unit, dir: this.settings.direction, speed: this.settings.speed };
   }
 
   scheduleUpdate(force = false) {
-    if (this._rafQueued) return;
+    if (this._rafQueued) {
+      this._force = this._force || !!force;
+      return;
+    }
     this._rafQueued = true;
     queueFrame(this, force);
   }
@@ -390,7 +490,6 @@ class Instance {
     ensureRO();
     if (RO) {
       RO.observe(this.el);
-      if (this.inner) RO.observe(this.inner);
     }
     if (IO) IO.observe(this.el);
     if (!IO) {
@@ -404,7 +503,6 @@ class Instance {
     try {
       if (RO) {
         RO.unobserve(this.el);
-        if (this.inner) RO.unobserve(this.inner);
       }
     } catch (_) { }
     try {
@@ -430,6 +528,7 @@ class Instance {
       this._unitTemplate.forEach((n) => frag.appendChild(n.cloneNode(true)));
     }
 
+    this._suppressInternalMutations();
     this.el.replaceChildren(frag);
   }
 }
@@ -445,7 +544,11 @@ function rescan() {
     const inst = REG.get(el);
     const next = readSettings(el);
     if (!inst) REG.set(el, new Instance(el));
-    else inst.applySettings(next);
+    else {
+      inst.refreshContent();
+      inst.applySettings(next);
+      inst.scheduleUpdate(true);
+    }
   });
   Array.from(REG.keys()).forEach((el) => {
     if (!nodes.has(el) || !el.hasAttribute("data-marquee")) {
